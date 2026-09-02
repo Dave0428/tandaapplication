@@ -9,7 +9,7 @@ router.use(requireAuth);
 /* GET /api/progress — everything this account knows about the person. */
 router.get('/progress', (req, res) => {
   const uid = req.user.uid;
-  const user = db.prepare('SELECT id, email, name, lang FROM users WHERE id = ?').get(uid);
+  const user = db.prepare('SELECT id, email, name, lang, role FROM users WHERE id = ?').get(uid);
   if(!user) return res.status(404).json({ error:'no such user' });
 
   const state = db.prepare('SELECT streak, plays, settings FROM user_state WHERE user_id = ?').get(uid)
