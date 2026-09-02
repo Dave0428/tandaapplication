@@ -1,0 +1,33 @@
+# Render Blueprint — ginagawang tunay na website ang server mo, libre.
+#
+# Paano gamitin:
+#   1. I-push ang buong "tanda" folder sa GitHub (git init, git add, git commit, git push)
+#   2. Pumunta sa render.com, mag-sign in gamit ang GitHub
+#   3. New → Blueprint → piliin ang repository mo
+#   4. Babasahin ni Render ang file na ito at kusang gagawa ng lahat
+#   5. Punan lang ang JWT_SECRET at (opsyonal) ang ANTHROPIC_API_KEY sa Environment tab
+#
+# WARNING: SQLite lang ito. Nabubura ang disk tuwing may bagong deploy sa
+# Render, kasama na ang tanda.db. Para sa isang thesis demo, sapat na ito —
+# tingnan ang mga user gamit ang admin.html, i-export ang CSV bago mag-redeploy.
+# Kung permanente ang gusto mo, basahin ang docs/DATABASE.md (Postgres).
+
+services:
+  - type: web
+    name: tanda
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+        required: false
+      - key: ADMIN_EMAIL
+        sync: false
+        required: false
+      - key: NODE_VERSION
+        value: 20.11.0

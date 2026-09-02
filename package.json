@@ -1,0 +1,25 @@
+{
+  "name": "tanda",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TANDA — games and phone guides for Filipino seniors",
+  "scripts": {
+    "build:single": "node tools/build-single.js",
+    "android:add": "cap add android",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "cap sync android && cd android && ./gradlew assembleDebug",
+    "ios:add": "cap add ios",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor-community/text-to-speech": "^5.0.0",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}

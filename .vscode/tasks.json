@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. I-install ang kailangan (isang beses lang)",
+      "type": "shell",
+      "command": "npm install",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "2. Simulan ang TANDA",
+      "detail": "Bubuksan ang server sa http://localhost:3000",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "problemMatcher": [],
+      "isBackground": true,
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "3. I-update ang database (kapag may bagong migration)",
+      "type": "shell",
+      "command": "npm run migrate",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always" }
+    },
+    {
+      "label": "Gumawa ng isang HTML file (dist/tanda.html)",
+      "type": "shell",
+      "command": "node tools/build-single.js",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always" }
+    }
+  ]
+}

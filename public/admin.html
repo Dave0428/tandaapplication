@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TANDA — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBF3E6;--surface:#fff;--ink:#2B2320;--soft:#6B5D52;--teal:#1D4B45;--marigold:#E8A33D;--red:#D9614F;--leaf:#4C7A5C;--line:rgba(43,35,32,.12);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Atkinson Hyperlegible',sans-serif;padding:24px;}
+h1,h2,h3{font-family:'Baloo 2',sans-serif;margin:0 0 12px}
+h1{font-size:1.7rem}
+h2{font-size:1.15rem;margin-top:28px}
+.wrap{max-width:1000px;margin:0 auto}
+.card{background:var(--surface);border-radius:16px;padding:18px;box-shadow:0 4px 0 0 rgba(43,35,32,.12);margin-bottom:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.kpi{background:var(--surface);border-radius:16px;padding:18px;box-shadow:0 4px 0 0 rgba(43,35,32,.12)}
+.kpi .n{font-family:'Baloo 2',sans-serif;font-weight:800;font-size:2rem;line-height:1}
+.kpi .l{color:var(--soft);font-size:.85rem;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--soft);font-size:.78rem;font-weight:700}
+tr:last-child td{border-bottom:none}
+.bar{height:20px;background:var(--marigold);border-radius:5px;min-width:3px}
+.barwrap{display:flex;align-items:center;gap:9px}
+button{font-family:inherit;border:none;border-radius:11px;padding:10px 15px;background:var(--teal);color:#fff;font-weight:700;cursor:pointer}
+button.ghost{background:none;border:2px solid var(--teal);color:var(--teal)}
+button.danger{background:var(--red)}
+button.mini{padding:5px 10px;font-size:.78rem;border-radius:8px}
+input{width:100%;padding:12px 14px;border-radius:12px;border:2px solid var(--line);font-family:inherit;font-size:1rem;margin-bottom:10px;background:#fff;color:var(--ink)}
+.login{max-width:340px;margin:60px auto}
+.err{color:var(--red);font-weight:700;font-size:.9rem}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--soft);font-size:.85rem}
+.tag{background:rgba(29,75,69,.1);color:var(--teal);border-radius:999px;padding:2px 9px;font-size:.72rem;font-weight:700}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="loginView" class="login hidden">
+    <h1>TANDA Admin</h1>
+    <p class="muted">Gamitin ang account na nakalagay sa ADMIN_EMAIL.</p>
+    <input id="email" type="email" placeholder="Email" autocomplete="email">
+    <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="loginBtn" style="width:100%">Mag-sign in</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+
+  <div id="dash" class="hidden">
+    <div class="row" style="justify-content:space-between;margin-bottom:18px">
+      <h1 style="margin:0">TANDA Admin</h1>
+      <div class="row">
+        <button class="ghost" id="refresh">I-refresh</button>
+        <button class="ghost" id="csv">I-export sa CSV</button>
+        <button class="ghost" id="out">Mag-sign out</button>
+      </div>
+    </div>
+    <div id="body"></div>
+  </div>
+
+</div>
+<script>
+var TOKEN = localStorage.getItem('tanda.admin.token');
+var DATA = null;
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function show(id, on){ document.getElementById(id).classList.toggle('hidden', !on); }
+
+function api(path, opts){
+  opts = opts || {};
+  return fetch('/api' + path, {
+    method: opts.method || 'GET',
+    headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + TOKEN},
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  }).then(function(r){
+    if(r.status === 401 || r.status === 403){ signOut(); throw new Error('walang access'); }
+    return r.json();
+  });
+}
+function signOut(){
+  TOKEN = null; localStorage.removeItem('tanda.admin.token');
+  show('dash', false); show('loginView', true);
+}
+
+/* ---- login ---- */
+document.getElementById('loginBtn').onclick = function(){
+  var err = document.getElementById('loginErr');
+  err.textContent = '';
+  fetch('/api/auth/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      email: document.getElementById('email').value,
+      password: document.getElementById('pass').value
+    })
+  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error || 'mali'); return d; }); })
+    .then(function(d){
+      TOKEN = d.token;
+      localStorage.setItem('tanda.admin.token', TOKEN);
+      load();
+    })
+    .catch(function(e){ err.textContent = 'Mali ang email o password.'; });
+};
+document.getElementById('out').onclick = signOut;
+document.getElementById('refresh').onclick = function(){ load(); };
+
+/* ---- dashboard ---- */
+function load(){
+  if(!TOKEN){ show('loginView', true); show('dash', false); return; }
+  api('/admin/stats').then(function(d){
+    DATA = d;
+    show('loginView', false); show('dash', true);
+    draw(d);
+  }).catch(function(){});
+}
+
+function bars(rows, labelKey, valueKey){
+  if(!rows.length) return '<p class="muted">Wala pang datos.</p>';
+  var max = Math.max.apply(null, rows.map(function(r){ return r[valueKey]; })) || 1;
+  return '<table>' + rows.map(function(r){
+    return '<tr><td style="width:38%">' + esc(r[labelKey]) + '</td>'
+      + '<td><div class="barwrap"><div class="bar" style="width:' + (r[valueKey] / max * 100) + '%"></div>'
+      + '<span>' + r[valueKey] + '</span></div></td></tr>';
+  }).join('') + '</table>';
+}
+
+function draw(d){
+  var t = d.totals;
+  var html = '<div class="kpis">'
+    + kpi(t.users, 'Mga user')
+    + kpi(t.activeThisWeek, 'Aktibo ngayong linggo')
+    + kpi(t.tutorialsDone, 'Natapos na gabay')
+    + kpi(t.gamesPlayed, 'Nalarong laro')
+    + '</div>';
+
+  html += '<h2>Aling gabay ang natatapos</h2><div class="card">'
+    + bars(d.perTutorial, 'tutorial_id', 'finishers')
+    + '<p class="muted" style="margin:12px 0 0">Ang mga wala sa listahan ay walang pang nakakatapos. '
+    + 'Iyon ang unang ayusin.</p></div>';
+
+  html += '<h2>Mga laro</h2><div class="card"><table>'
+    + '<tr><th>Laro</th><th>Beses nilaro</th><th>Average na puntos</th></tr>'
+    + (d.perGame.length ? d.perGame.map(function(g){
+        return '<tr><td>' + esc(g.game) + '</td><td>' + g.plays + '</td><td>' + (g.avg_score == null ? '—' : g.avg_score) + '</td></tr>';
+      }).join('') : '<tr><td colspan="3" class="muted">Wala pang datos.</td></tr>')
+    + '</table></div>';
+
+  html += '<h2>Mga user (' + d.users.length + ')</h2><div class="card" style="overflow-x:auto"><table>'
+    + '<tr><th>Email</th><th>Pangalan</th><th>Wika</th><th>Gabay</th><th>Laro</th><th>Streak</th><th>Sumali</th><th></th></tr>'
+    + d.users.map(function(u){
+        return '<tr>'
+          + '<td>' + esc(u.email) + (u.role === 'admin' ? ' <span class="tag">admin</span>' : '') + '</td>'
+          + '<td>' + esc(u.name) + '</td>'
+          + '<td>' + esc(u.lang) + '</td>'
+          + '<td>' + u.done + '</td><td>' + u.games + '</td><td>' + u.streak + '</td>'
+          + '<td class="muted">' + esc(u.joined) + '</td>'
+          + '<td><button class="mini ghost" data-view="' + u.id + '">Tingnan</button> '
+          + '<button class="mini danger" data-del="' + u.id + '">Burahin</button></td>'
+          + '</tr>';
+      }).join('')
+    + '</table></div><div id="detail"></div>';
+
+  document.getElementById('body').innerHTML = html;
+}
+function kpi(n, label){ return '<div class="kpi"><div class="n">' + n + '</div><div class="l">' + label + '</div></div>'; }
+
+/* ---- one user ---- */
+document.addEventListener('click', function(e){
+  var v = e.target.getAttribute && e.target.getAttribute('data-view');
+  var del = e.target.getAttribute && e.target.getAttribute('data-del');
+
+  if(v){
+    api('/admin/user/' + v).then(function(d){
+      document.getElementById('detail').innerHTML =
+        '<h2>' + esc(d.user.email) + '</h2><div class="card">'
+        + '<p class="muted">Sumali ' + esc(d.user.created_at) + ' · huling nakita ' + esc(d.user.last_seen_at || '—') + '</p>'
+        + '<h3 style="margin-top:14px">Natapos na gabay (' + d.tutorials.length + ')</h3>'
+        + (d.tutorials.length
+            ? '<table>' + d.tutorials.map(function(x){ return '<tr><td>' + esc(x.tutorial_id) + '</td><td class="muted">' + esc(x.done_at) + '</td></tr>'; }).join('') + '</table>'
+            : '<p class="muted">Wala pa.</p>')
+        + '<h3 style="margin-top:14px">Huling mga laro</h3>'
+        + (d.games.length
+            ? '<table>' + d.games.map(function(x){ return '<tr><td>' + esc(x.game) + '</td><td>' + x.score + '</td><td class="muted">' + esc(x.played_at) + '</td></tr>'; }).join('') + '</table>'
+            : '<p class="muted">Wala pa.</p>')
+        + '</div>';
+      document.getElementById('detail').scrollIntoView({behavior:'smooth'});
+    });
+  }
+
+  if(del){
+    if(!confirm('Buburahin ang user na ito pati lahat ng progreso niya. Hindi na ito maibabalik. Sigurado ka?')) return;
+    api('/admin/user/' + del, {method:'DELETE'}).then(load);
+  }
+});
+
+/* ---- CSV para sa thesis ---- */
+document.getElementById('csv').onclick = function(){
+  if(!DATA) return;
+  var head = ['email','pangalan','wika','gabay_na_tapos','laro','streak','sumali'];
+  var lines = [head.join(',')].concat(DATA.users.map(function(u){
+    return [u.email, u.name, u.lang, u.done, u.games, u.streak, u.joined]
+      .map(function(c){ return '"' + String(c == null ? '' : c).replace(/"/g,'""') + '"'; }).join(',');
+  }));
+  var blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tanda-users-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+};
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on",
+  "files.eol": "\n",
+  "liveServer.settings.root": "/public",
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/android": true
+  }
+}

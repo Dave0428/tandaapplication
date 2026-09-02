@@ -1,0 +1,46 @@
+# Sinusubukan lang ang iOS build sa Simulator — HINDI ito gumagawa ng
+# maiinstall na file sa totoong iPhone. Iyon ay nangangailangan ng Apple
+# Developer account at code signing, na hindi kayang gawin ng CI nang mag-isa.
+#
+# Ang silbi nito: sinisiguro na buo pa rin ang iOS na bahagi ng app
+# (walang error sa Swift/Xcode project) tuwing may bagong push. Kung ninanais
+# mong totoong subukan sa sariling iPhone, tingnan ang docs/IOS.md — kailangan
+# doon ng Mac at Xcode sa harap mo.
+
+name: Build iOS (Simulator lang, hindi para i-install)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create the iOS project
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Copy the web app into the iOS project
+        run: npx cap sync ios
+
+      - name: Build for Simulator only (no signing)
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -sdk iphonesimulator -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Report
+        run: echo "Tapos. Ito ay build para sa Simulator lang — walang IPA na malalabas dito. Basahin ang docs/IOS.md para sa totoong iPhone."

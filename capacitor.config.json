@@ -1,0 +1,15 @@
+{
+  "appId": "ph.tanda.app",
+  "appName": "TANDA",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#FBF3E6"
+    }
+  }
+}

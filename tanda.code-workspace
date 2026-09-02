@@ -1,0 +1,14 @@
+{
+  "folders": [
+    { "name": "TANDA", "path": "." }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      "**/android": true
+    },
+    "editor.wordWrap": "on",
+    "editor.tabSize": 2
+  }
+}

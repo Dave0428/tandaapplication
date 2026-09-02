@@ -1,0 +1,61 @@
+# Builds an installable APK in the cloud. You do NOT need Android Studio.
+#
+# How to use it:
+#   1. Push this project to GitHub.
+#   2. Open the "Actions" tab on your repository.
+#   3. Choose "Build Android APK" and press "Run workflow".
+#   4. Wait about 5 minutes, then download "tanda-apk" at the bottom of the run.
+#   5. Send that file to a phone and open it.
+#
+# It also runs by itself on every push to main.
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Capacitor 6 needs Java 17. The runner already has the Android SDK.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create the Android project
+        # `cap add android` only scaffolds files, so it is safe to run in CI.
+        # If the android/ folder is already committed, this step is skipped.
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Copy the web app into the Android project
+        run: npx cap sync android
+
+      - name: Build the APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tanda-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+**/.env
+server/*.db
+server/*.db-shm
+server/*.db-wal
+.DS_Store
+
+# Capacitor
+android/
+ios/
