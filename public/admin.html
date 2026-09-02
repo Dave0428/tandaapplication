@@ -63,6 +63,8 @@ input{width:100%;padding:12px 14px;border-radius:12px;border:2px solid var(--lin
 
 </div>
 <script>
+var API_BASE = window.TANDA_ADMIN_API_BASE || 'https://tanda-tzlu.onrender.com';
+
 var TOKEN = localStorage.getItem('tanda.admin.token');
 var DATA = null;
 
@@ -72,7 +74,7 @@ function show(id, on){ document.getElementById(id).classList.toggle('hidden', !o
 
 function api(path, opts){
   opts = opts || {};
-  return fetch('/api' + path, {
+  return fetch(API_BASE + '/api' + path, {
     method: opts.method || 'GET',
     headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + TOKEN},
     body: opts.body ? JSON.stringify(opts.body) : undefined
@@ -90,7 +92,7 @@ function signOut(){
 document.getElementById('loginBtn').onclick = function(){
   var err = document.getElementById('loginErr');
   err.textContent = '';
-  fetch('/api/auth/login', {
+  fetch(API_BASE + '/api/auth/login', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       email: document.getElementById('email').value,
@@ -102,7 +104,16 @@ document.getElementById('loginBtn').onclick = function(){
       localStorage.setItem('tanda.admin.token', TOKEN);
       load();
     })
-    .catch(function(e){ err.textContent = 'Mali ang email o password.'; });
+    .catch(function(e){
+      var msg = (e && e.message) || '';
+      if(msg === 'Failed to fetch' || msg === 'Load failed' || /NetworkError/i.test(msg)){
+        err.textContent = 'Hindi maabot ang server (' + API_BASE + '). Tingnan ang internet.';
+      }else if(msg === 'bad credentials'){
+        err.textContent = 'Mali ang email o password.';
+      }else{
+        err.textContent = 'May error: ' + msg;
+      }
+    });
 };
 document.getElementById('out').onclick = signOut;
 document.getElementById('refresh').onclick = function(){ load(); };
