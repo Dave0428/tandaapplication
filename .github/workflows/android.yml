@@ -4,7 +4,7 @@
 #   1. Push this project to GitHub.
 #   2. Open the "Actions" tab on your repository.
 #   3. Choose "Build Android APK" and press "Run workflow".
-#   4. Wait about 5 minutes, then download "tanda-apk" at the bottom of the run.
+#   4. Wait about 5 minutes, then download "TANDA" at the bottom of the run.
 #   5. Send that file to a phone and open it.
 #
 # It also runs by itself on every push to main.
@@ -27,7 +27,6 @@ jobs:
         with:
           node-version: '20'
 
-      # Capacitor 6 needs Java 17. The runner already has the Android SDK.
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -37,8 +36,6 @@ jobs:
         run: npm install
 
       - name: Create the Android project
-        # `cap add android` only scaffolds files, so it is safe to run in CI.
-        # If the android/ folder is already committed, this step is skipped.
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
@@ -53,12 +50,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Tanda
+      - name: Rename the APK to something readable
         run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/TANDA.apk
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4
         with:
-          name: tanda-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: TANDA
+          path: android/app/build/outputs/apk/debug/TANDA.apk
           if-no-files-found: error
