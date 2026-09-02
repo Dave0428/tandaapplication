@@ -44,7 +44,6 @@ function viewWelcome(){
     + '<label class="f">'+esc(t('nameQ'))+'</label>'
     + '<input class="t" id="nameIn" placeholder="Lola Rosa" autocomplete="name">'
     + '<button class="btn" style="margin-top:16px" data-act="setname">'+esc(t('start'))+'</button>'
-    + '<p class="center" style="margin-top:16px"><button class="btn small ghost" data-act="go" data-arg="account">'+esc(t('signIn'))+'</button></p>'
     + '</div>';
 }
 
