@@ -55,6 +55,7 @@ function updateVoiceUi(){
   if(box) box.innerHTML = voiceStatusHtml();
 }
 function voiceStatusHtml(){
+  if(nativeTTS()) return '';   // real Android/iOS voice is available
   if(!ttsSupported() || VOICE_OK === false){
     var why = !ttsSupported() ? t('voiceNone')
             : (VOICES.length ? t('voiceBlocked') : t('voiceNone'));
