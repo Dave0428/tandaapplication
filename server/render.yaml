@@ -30,4 +30,4 @@ services:
         sync: false
         required: false
       - key: NODE_VERSION
-        value: 20.11.0
+        value: 22.11.0
