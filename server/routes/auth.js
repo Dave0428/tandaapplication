@@ -42,7 +42,18 @@ router.post('/register', (req, res) => {
   const info = db.prepare('INSERT INTO users (email, password_hash, name) VALUES (?,?,?)').run(email, hash, name);
   db.prepare('INSERT INTO user_state (user_id) VALUES (?)').run(info.lastInsertRowid);
 
-  const user = { id: info.lastInsertRowid, email, name, role: 'user' };
+  // Promote to admin right here, at registration — not on the next server
+  // restart. On hosts with an ephemeral filesystem (Render's free tier),
+  // restarting wipes the database anyway, so waiting for a restart to
+  // promote an admin is a trap: the very act of restarting deletes the
+  // account it was meant to promote.
+  let role = 'user';
+  if(process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.toLowerCase()){
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(info.lastInsertRowid);
+    role = 'admin';
+  }
+
+  const user = { id: info.lastInsertRowid, email, name, role };
   res.json({ token: sign(user), user });
 });
 
