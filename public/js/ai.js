@@ -44,8 +44,10 @@ window.TandaAI = (function(){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({messages: messages, tier: opts.modelTier || 'default'})
     }).then(function(r){
-      if(!r.ok) throw {code:'upstream_error', message:'HTTP ' + r.status};
-      return r.json();
+      return r.json().then(function(body){
+        if(!r.ok) throw {code:'upstream_error', message:'HTTP ' + r.status + ' upstream=' + (body.upstreamStatus || '?') + ' ' + (body.upstreamDetail || '')};
+        return body;
+      });
     }).then(function(d){
       var text = d.text || '';
       /* the server route is not streaming, so fire onText once with the whole thing */
