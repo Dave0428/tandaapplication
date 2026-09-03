@@ -170,11 +170,31 @@ function startTrivia(){
     + 'Mix easy general knowledge about Filipino daily life with practical phone and online-safety questions. Keep every question under 18 words and every choice under 5 words. '
     + 'Reply with only a JSON array of 6 objects shaped like {"q": "question text", "o": ["choice1","choice2","choice3"], "a": 0} where a is the index of the correct choice.';
   if(!aiReady()){ S.g = {qs: FALLBACK_Q[S.data.lang]||FALLBACK_Q.en, i:0, score:0, picked:null}; render(); return; }
-  TandaAI.json(prompt, {modelTier:'default', cache:false}).then(function(list){
+
+  var settled = false;
+  var fallbackTimer = setTimeout(function(){
+    if(settled) return;
+    settled = true;
+    // Slow connection or a busy model: don't leave someone staring at
+    // "Writing your questions..." indefinitely. Start with the
+    // ready-made set now; the AI-written ones just aren't worth the wait.
+    S.g = {qs: FALLBACK_Q[S.data.lang]||FALLBACK_Q.en, i:0, score:0, picked:null};
+    render();
+  }, 15000);
+
+  // 'quick' (Haiku) is plenty for six short trivia questions, and answers
+  // noticeably faster than the default model.
+  TandaAI.json(prompt, {modelTier:'quick', cache:false}).then(function(list){
+    if(settled) return;
+    clearTimeout(fallbackTimer);
+    settled = true;
     var ok = Array.isArray(list) ? list.filter(function(x){ return x && x.q && Array.isArray(x.o) && x.o.length>=2; }) : [];
     S.g = {qs: ok.length ? ok : (FALLBACK_Q[S.data.lang]||FALLBACK_Q.en), i:0, score:0, picked:null};
     render();
   }).catch(function(){
+    if(settled) return;
+    clearTimeout(fallbackTimer);
+    settled = true;
     S.g = {qs: FALLBACK_Q[S.data.lang]||FALLBACK_Q.en, i:0, score:0, picked:null, failed:true};
     render();
   });
