@@ -26,7 +26,7 @@ function requireAuth(req, res, next){
   }
 }
 
-router.post('/register', (req, res) => {
+router.post('/register',async (req, res) => {
   const name = String(req.body.name || '').trim().slice(0, 60);
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
@@ -42,7 +42,7 @@ router.post('/register', (req, res) => {
   const info = db.prepare('INSERT INTO users (email, password_hash, name) VALUES (?,?,?)').run(email, hash, name);
   db.prepare('INSERT INTO user_state (user_id) VALUES (?)').run(info.lastInsertRowid);
 
-  // Promote to admin right here, at registration — not on the next server
+  // Promote to admin right here, at registration — not onrouter.post('/register', async (req, res) => { the next server
   // restart. On hosts with an ephemeral filesystem (Render's free tier),
   // restarting wipes the database anyway, so waiting for a restart to
   // promote an admin is a trap: the very act of restarting deletes the
@@ -57,7 +57,7 @@ router.post('/register', (req, res) => {
   res.json({ token: sign(user), user });
 });
 
-router.post('/login', (req, res) => {
+router.post('/login',async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
 
