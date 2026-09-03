@@ -22,7 +22,7 @@ var UI = {
     aiErr:'Something went wrong. Please try again.',
     hint:'Hint', check:'Check', clear:'Clear', next:'Next',
     progress:'{a} of {b} guides learned', voiceNote:'Tap the speaker to hear any step.',
-    newQ:'New questions', quizLoading:'Writing your questions…',
+    newQ:'New questions', quizLoading:'Writing your questions…', useReadyQ:'Use ready-made questions instead',
     suggest1:'How do I video call my grandchild?', suggest2:'Someone texted me asking for a code. What do I do?',
     suggest3:'How do I make my screen brighter?',
     readStep:'Read this step aloud', novoice:'Your phone has no Filipino voice, so the English voice will read it.',
@@ -66,7 +66,7 @@ var UI = {
     aiErr:'May naganap na problema. Subukan ulit.',
     hint:'Pahiwatig', check:'Tingnan', clear:'Burahin', next:'Susunod',
     progress:'{a} sa {b} gabay ang natutunan', voiceNote:'Pindutin ang speaker para marinig ang bawat hakbang.',
-    newQ:'Bagong tanong', quizLoading:'Ginagawa ang mga tanong mo…',
+    newQ:'Bagong tanong', quizLoading:'Ginagawa ang mga tanong mo…', useReadyQ:'Gamitin na ang mga handa nang tanong',
     suggest1:'Paano ako mag-video call sa apo ko?', suggest2:'May nag-text na humihingi ng code. Ano ang gagawin ko?',
     suggest3:'Paano ko gawing mas maliwanag ang screen?',
     readStep:'Basahin ang hakbang', novoice:'Walang Filipino na boses ang telepono mo, kaya Ingles na boses ang magbabasa.',
@@ -95,4 +95,3 @@ function t(k, vars){
   return s;
 }
 function L(pair){ return S.data.lang === 'tl' ? pair[1] : pair[0]; }
-    
