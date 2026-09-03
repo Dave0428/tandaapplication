@@ -18,10 +18,12 @@
 }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
+html{
+  font-size:calc(16px * var(--scale));
+}
 body{
   background:var(--bg); color:var(--ink);
   font-family:'Atkinson Hyperlegible','Segoe UI',system-ui,sans-serif;
-  font-size:calc(16px * var(--scale));
   -webkit-text-size-adjust:100%;
   display:flex; justify-content:center; min-height:100vh;
 }
