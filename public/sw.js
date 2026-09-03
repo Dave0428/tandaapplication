@@ -1,7 +1,7 @@
 /* TANDA service worker — makes the app open with no internet.
    IMPORTANT when you ship an update: change CACHE below (v2, v3...).
    The browser only replaces old files when this string changes. */
-var CACHE = 'tanda-v3';
+var CACHE = 'tanda-v4';
 var FILES = [
   '.', 'index.html', 'css/styles.css', 'manifest.json',
   'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'favicon.ico', 'favicon-32.png',
