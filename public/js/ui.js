@@ -202,7 +202,7 @@ function sendAsk(text){
     render();
   });
 }
-}
+
 
 /* in-tutorial AI */
 function tutorialAi(mode){
