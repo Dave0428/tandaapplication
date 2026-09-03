@@ -37,6 +37,11 @@ shell.addEventListener('click', function(ev){
   }
   if(a === 'stopspeak'){ stopSpeak(); return; }
   if(a === 'authmode'){ authMode = authMode === 'login' ? 'register' : 'login'; authErr = ''; render(); return; }
+  if(a === 'togglepass'){
+    var pf = document.getElementById('auPass');
+    if(pf){ pf.type = pf.type === 'password' ? 'text' : 'password'; el.textContent = pf.type === 'password' ? t('showPass') : t('hidePass'); }
+    return;
+  }
   if(a === 'signout'){ TandaAPI.signOut(); S.data.account = null; save(); S.screen = 'me'; render(); return; }
   if(a === 'authgo'){
     var email = (document.getElementById('auEmail')||{}).value || '';
@@ -44,8 +49,25 @@ shell.addEventListener('click', function(ev){
     var nm    = (document.getElementById('auName')||{}).value || S.data.name || '';
     authErr = '';
     el.disabled = true;
+    var originalLabel = el.textContent;
+    el.textContent = t('pleaseWait');
+
+    // The free server can be asleep and take up to ~60s to wake on the
+    // first request. Without this, that wait looks exactly like a dead
+    // button. Give it real time, but not forever.
+    var timedOut = false;
+    var timeoutId = setTimeout(function(){
+      timedOut = true;
+      authErr = t('stillWaiting');
+      el.disabled = false;
+      el.textContent = originalLabel;
+      render();
+    }, 75000);
+
     var p = authMode === 'register' ? TandaAPI.register(nm, email, pass) : TandaAPI.login(email, pass);
     p.then(function(res){
+      if(timedOut) return;
+      clearTimeout(timeoutId);
       S.data.account = res.user;
       if(res.user.name && !S.data.name) S.data.name = res.user.name;
       if(res.progress) TandaAPI.mergeInto(S.data, res.progress);
@@ -53,7 +75,9 @@ shell.addEventListener('click', function(ev){
       S.screen = S.data.name ? 'me' : 'home';
       render();
     }).catch(function(e){
-      authErr = t(e && e.msgKey ? e.msgKey : 'serverBad');
+      if(timedOut) return;
+      clearTimeout(timeoutId);
+      authErr = t(e && e.msgKey ? e.msgKey : 'serverBad', {base: TandaAPI.base}) + '\n[' + TandaAPI.base + ']';
       render();
     });
     return;
@@ -110,7 +134,7 @@ shell.addEventListener('click', function(ev){
   }
   if(a === 'nextmath'){
     S.g.n++;
-    if(S.g.n >= 10){ winModal(t('score')+': '+S.g.score+' / 10'); return; }
+    if(S.g.n >= 10){ winModal(t('score')+': '+S.g.score+' / 10', S.g.score); return; }
     nextMath(); render(); return;
   }
   if(a === 'triv'){
@@ -119,7 +143,18 @@ shell.addEventListener('click', function(ev){
     if(Number(arg) === Number(S.g.qs[S.g.i].a)) S.g.score++;
     render(); return;
   }
-  if(a === 'nexttriv'){ S.g.i++; S.g.picked = null; render(); return; }
+  if(a === 'nexttriv'){
+    S.g.i++; S.g.picked = null;
+    // The quiz has its own end screen instead of the shared winModal, so
+    // recording the finished round happens right here — once, guarded by
+    // a flag, the moment the last question is passed.
+    if(S.g.i >= S.g.qs.length && !S.g.recorded){
+      S.g.recorded = true;
+      S.data.plays = (S.data.plays||0)+1; save();
+      if(window.TandaAPI) TandaAPI.recordGame('trivia', S.g.score, {total: S.g.qs.length});
+    }
+    render(); return;
+  }
 });
 shell.addEventListener('input', function(ev){
   var el = ev.target.closest('[data-act]');
@@ -159,10 +194,13 @@ function viewAccount(){
     + '<div class="pad">'
     + (reg ? '<label class="f">' + esc(t('yourName')) + '</label><input class="t" id="auName" style="margin-bottom:12px">' : '')
     + '<label class="f">' + esc(t('email')) + '</label>'
-    + '<input class="t" id="auEmail" type="email" autocomplete="email" inputmode="email" style="margin-bottom:12px">'
+    + '<input class="t" id="auEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" style="margin-bottom:12px">'
     + '<label class="f">' + esc(t('password')) + '</label>'
-    + '<input class="t" id="auPass" type="password" autocomplete="' + (reg ? 'new-password' : 'current-password') + '">'
-    + (authErr ? '<p style="color:var(--terracotta);font-weight:700;margin:12px 0 0">' + esc(authErr) + '</p>' : '')
+    + '<div style="position:relative;margin-bottom:2px">'
+    + '<input class="t" id="auPass" type="password" autocomplete="' + (reg ? 'new-password' : 'current-password') + '" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:52px">'
+    + '<button type="button" data-act="togglepass" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;padding:10px;cursor:pointer;color:var(--ink-soft)">' + esc(t('showPass')) + '</button>'
+    + '</div>'
+    + (authErr ? '<p style="color:var(--terracotta);font-weight:700;margin:12px 0 0;white-space:pre-wrap">' + esc(authErr) + '</p>' : '')
     + '<button class="btn" style="margin-top:16px" data-act="authgo">' + esc(reg ? t('createAcc') : t('signIn')) + '</button>'
     + '<p class="center" style="margin-top:14px"><button class="btn small ghost" data-act="authmode">'
       + esc(reg ? t('haveAcc') : t('createAcc')) + '</button></p>'
@@ -170,7 +208,6 @@ function viewAccount(){
       + esc(t('offlineOk')) + '</button></p>'
     + '</div></div>' + nav('me');
 }
-
 /* ---------- voice diagnostic ---------- */
 function runVoiceCheck(){
   var out = document.getElementById('vcOut');
@@ -226,4 +263,3 @@ function bigReader(){
     + '</div></div>';
   render();
 }
-
