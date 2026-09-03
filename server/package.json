@@ -1,28 +1,22 @@
 {
-  "name": "tanda",
+  "name": "tanda-server",
   "version": "1.0.0",
-  "private": true,
-  "description": "TANDA — games and phone guides for Filipino seniors",
+  "description": "Accounts and progress sync for the TANDA app",
+  "main": "server.js",
+  "type": "commonjs",
   "scripts": {
-    "build:single": "node tools/build-single.js",
-    "android:add": "cap add android",
-    "android:icons": "capacitor-assets generate --android",
-    "android:sync": "cap sync android",
-    "android:open": "cap open android",
-    "android:apk": "cap sync android && cd android && ./gradlew assembleDebug",
-    "ios:add": "cap add ios",
-    "ios:sync": "cap sync ios",
-    "ios:open": "cap open ios"
+    "start": "node --experimental-sqlite server.js",
+    "dev": "node --experimental-sqlite --watch server.js",
+    "migrate": "node --experimental-sqlite db.js --migrate"
   },
+  "engines": { "node": ">=22" },
   "dependencies": {
-    "@capacitor-community/text-to-speech": "^5.0.0",
-    "@capacitor/android": "^6.1.2",
-    "@capacitor/app": "^6.0.1",
-    "@capacitor/ios": "^6.1.2",
-    "@capacitor/core": "^6.1.2"
-  },
-  "devDependencies": {
-    "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^6.1.2"
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
   }
 }
