@@ -66,7 +66,7 @@ shell.addEventListener('click', function(ev){
 
     var p = authMode === 'register' ? TandaAPI.register(nm, email, pass) : TandaAPI.login(email, pass);
     p.then(function(res){
-      if(timedOut) return;
+      if(timedOut) return;   // the timeout already redrew the screen; don't fight it
       clearTimeout(timeoutId);
       S.data.account = res.user;
       if(res.user.name && !S.data.name) S.data.name = res.user.name;
@@ -103,6 +103,12 @@ shell.addEventListener('click', function(ev){
   if(a === 'game'){ S.game = arg; S.g = {}; S.screen='game'; S.modal=null;
     if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath();
     render(); if(arg==='trivia') startTrivia(); return; }
+  if(a === 'usefallback'){
+    var flb = (FALLBACK_Q[S.data.lang] || FALLBACK_Q.en);
+    S.g = {qs: flb, i:0, score:0, picked:null};
+    render();
+    return;
+  }
   if(a === 'replay'){ S.modal=null;
     if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord();
     else if(S.game==='math') initMath(); else if(S.game==='trivia'){ startTrivia(); return; }
@@ -200,7 +206,7 @@ function viewAccount(){
     + '<input class="t" id="auPass" type="password" autocomplete="' + (reg ? 'new-password' : 'current-password') + '" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:52px">'
     + '<button type="button" data-act="togglepass" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;padding:10px;cursor:pointer;color:var(--ink-soft)">' + esc(t('showPass')) + '</button>'
     + '</div>'
-    + (authErr ? '<p style="color:var(--terracotta);font-weight:700;margin:12px 0 0;white-space:pre-wrap">' + esc(authErr) + '</p>' : '')
+    + (authErr ? '<p style="color:var(--terracotta);font-weight:700;margin:12px 0 0">' + esc(authErr) + '</p>' : '')
     + '<button class="btn" style="margin-top:16px" data-act="authgo">' + esc(reg ? t('createAcc') : t('signIn')) + '</button>'
     + '<p class="center" style="margin-top:14px"><button class="btn small ghost" data-act="authmode">'
       + esc(reg ? t('haveAcc') : t('createAcc')) + '</button></p>'
@@ -208,6 +214,7 @@ function viewAccount(){
       + esc(t('offlineOk')) + '</button></p>'
     + '</div></div>' + nav('me');
 }
+
 /* ---------- voice diagnostic ---------- */
 function runVoiceCheck(){
   var out = document.getElementById('vcOut');
@@ -263,3 +270,5 @@ function bigReader(){
     + '</div></div>';
   render();
 }
+
+     
