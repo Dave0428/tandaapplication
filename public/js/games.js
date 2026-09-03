@@ -9,13 +9,14 @@ function viewGame(){
   var titleKey = (GAMES.filter(function(g){return g.id===S.game;})[0]||{}).tk || 'games';
   return '<div class="scroll">' + head(t(titleKey), 'games') + body + '</div>';
 }
-function winModal(msg){
+function winModal(msg, score){
   S.modal = '<div class="backdrop"><div class="modal"><div class="ic">🏆</div>'
     + '<h3>'+esc(t('won'))+'</h3><p>'+esc(msg || t('wonS',{n:S.data.name||t('friend')}))+'</p>'
     + '<button class="btn" data-act="replay">'+esc(t('restart'))+'</button>'
     + '<div style="height:9px"></div>'
     + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
   S.data.plays = (S.data.plays||0)+1; save();
+  if(window.TandaAPI && S.game) TandaAPI.recordGame(S.game, score != null ? score : 1, {});
   render();
 }
 
@@ -46,7 +47,7 @@ function flip(i){
     if(a.f === b.f){
       a.done = b.done = true; g.open = [];
       render();
-      if(g.cards.every(function(x){return x.done;})) setTimeout(function(){ winModal(t('wonS',{n:S.data.name||t('friend')})+' ('+g.moves+' '+t('moves').toLowerCase()+')'); }, 400);
+      if(g.cards.every(function(x){return x.done;})) setTimeout(function(){ winModal(t('wonS',{n:S.data.name||t('friend')})+' ('+g.moves+' '+t('moves').toLowerCase()+')', g.moves); }, 400);
       return;
     }
     g.lock = true; render();
@@ -83,7 +84,7 @@ function slide(i){
   if(Math.abs(r1-r2)+Math.abs(c1-c2) !== 1) return;
   a[b]=a[i]; a[i]=0; S.g.moves++;
   render();
-  if(solved(a)) setTimeout(function(){ winModal(t('wonS',{n:S.data.name||t('friend')})); }, 300);
+  if(solved(a)) setTimeout(function(){ winModal(t('wonS',{n:S.data.name||t('friend')}), S.g.moves); }, 300);
 }
 
 /* --- word builder --- */
