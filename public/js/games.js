@@ -200,7 +200,8 @@ function startTrivia(){
   });
 }
 function gTrivia(){
-  if(S.g.loading || !S.g.qs) return '<div class="gwrap"><div class="card center"><span class="thinking"><span class="dot-anim"></span><span class="dot-anim"></span><span class="dot-anim"></span> '+esc(t('quizLoading'))+'</span></div></div>';
+  if(S.g.loading || !S.g.qs) return '<div class="gwrap"><div class="card center"><span class="thinking"><span class="dot-anim"></span><span class="dot-anim"></span><span class="dot-anim"></span> '+esc(t('quizLoading'))+'</span></div>'
+    + '<button class="btn ghost" style="margin-top:14px" data-act="usefallback">'+esc(t('useReadyQ'))+'</button></div>';
   var q = S.g.qs[S.g.i];
   if(!q) return '<div class="gwrap"><div class="card center"><p>'+esc(t('score'))+': '+S.g.score+' / '+S.g.qs.length+'</p>'
     + '<button class="btn" data-act="replay">'+esc(t('newQ'))+'</button></div></div>';
