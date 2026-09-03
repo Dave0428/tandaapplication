@@ -26,51 +26,65 @@ function requireAuth(req, res, next){
   }
 }
 
-router.post('/register',async (req, res) => {
-  const name = String(req.body.name || '').trim().slice(0, 60);
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '');
+router.post('/register', async (req, res) => {
+  try{
+    const name = String(req.body.name || '').trim().slice(0, 60);
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error:'bad email', msgKey:'badLogin' });
-  if(password.length < 8) return res.status(400).json({ error:'short password', msgKey:'shortPw' });
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error:'bad email', msgKey:'badLogin' });
+    if(password.length < 8) return res.status(400).json({ error:'short password', msgKey:'shortPw' });
 
-  const exists = await db.get('SELECT id FROM users WHERE email = ?', [email]);
-  if(exists) return res.status(409).json({ error:'email taken', msgKey:'taken' });
+    const exists = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+    if(exists) return res.status(409).json({ error:'email taken', msgKey:'taken' });
 
-  // 10 rounds is the usual balance of safety and speed on a small server.
-  const hash = bcrypt.hashSync(password, 10);
-  const info = db.prepare('INSERT INTO users (email, password_hash, name) VALUES (?,?,?)').run(email, hash, name);
-  db.prepare('INSERT INTO user_state (user_id) VALUES (?)').run(info.lastInsertRowid);
+    // 10 rounds is the usual balance of safety and speed on a small server.
+    const hash = bcrypt.hashSync(password, 10);
+    const newId = await db.insertReturningId(
+      'INSERT INTO users (email, password_hash, name) VALUES (?,?,?)',
+      [email, hash, name]
+    );
+    await db.run('INSERT INTO user_state (user_id) VALUES (?)', [newId]);
 
-  // Promote to admin right here, at registration — not onrouter.post('/register', async (req, res) => { the next server
-  // restart. On hosts with an ephemeral filesystem (Render's free tier),
-  // restarting wipes the database anyway, so waiting for a restart to
-  // promote an admin is a trap: the very act of restarting deletes the
-  // account it was meant to promote.
-  let role = 'user';
-  if(process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.toLowerCase()){
-    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(info.lastInsertRowid);
-    role = 'admin';
+    // Promote to admin right here, at registration — not on the next server
+    // restart. On hosts with an ephemeral filesystem (Render's free tier),
+    // restarting wipes the database anyway, so waiting for a restart to
+    // promote an admin is a trap: the very act of restarting deletes the
+    // account it was meant to promote.
+    let role = 'user';
+    if(process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.toLowerCase()){
+      await db.run("UPDATE users SET role = 'admin' WHERE id = ?", [newId]);
+      role = 'admin';
+    }
+
+    const user = { id: newId, email, name, role };
+    res.json({ token: sign(user), user });
+  }catch(err){
+    console.error('register failed:', err);
+    res.status(500).json({ error:'server error' });
   }
-
-  const user = { id: info.lastInsertRowid, email, name, role };
-  res.json({ token: sign(user), user });
 });
 
-router.post('/login',async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '');
+router.post('/login', async (req, res) => {
+  try{
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
 
-  const row = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  // Same message whether the email or the password was wrong: never tell an
-  // attacker which of the two exists.
-  if(!row || !bcrypt.compareSync(password, row.password_hash)){
-    return res.status(401).json({ error:'bad credentials', msgKey:'badLogin' });
+    const row = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+    // Same message whether the email or the password was wrong: never tell an
+    // attacker which of the two exists.
+    if(!row || !bcrypt.compareSync(password, row.password_hash)){
+      return res.status(401).json({ error:'bad credentials', msgKey:'badLogin' });
+    }
+    await db.run('UPDATE users SET last_seen_at = ? WHERE id = ?', [new Date().toISOString(), row.id]);
+
+    const user = { id: row.id, email: row.email, name: row.name, role: row.role };
+    res.json({ token: sign(user), user });
+  }catch(err){
+    console.error('login failed:', err);
+    res.status(500).json({ error:'server error' });
   }
-  db.prepare("UPDATE users SET last_seen_at = datetime('now') WHERE id = ?").run(row.id);
-
-  const user = { id: row.id, email: row.email, name: row.name, role: row.role };
-  res.json({ token: sign(user), user });
 });
 
 module.exports = { router, requireAuth };
+        
