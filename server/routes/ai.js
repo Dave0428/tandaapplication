@@ -48,7 +48,7 @@ router.post('/ask', limiter, async (req, res) => {
     if(!r.ok){
       const detail = await r.text();
       console.error('anthropic error', r.status, detail.slice(0, 300));
-      return res.status(502).json({ error:'upstream error' });
+      return res.status(502).json({ error:'upstream error', upstreamStatus: r.status, upstreamDetail: detail.slice(0, 200) });
     }
 
     const data = await r.json();
@@ -61,4 +61,3 @@ router.post('/ask', limiter, async (req, res) => {
 });
 
 module.exports = router;
-                           
