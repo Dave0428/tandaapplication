@@ -180,7 +180,7 @@ function startTrivia(){
     // ready-made set now; the AI-written ones just aren't worth the wait.
     S.g = {qs: FALLBACK_Q[S.data.lang]||FALLBACK_Q.en, i:0, score:0, picked:null};
     render();
-  }, 15000);
+  }, 8000);
 
   // 'quick' (Haiku) is plenty for six short trivia questions, and answers
   // noticeably faster than the default model.
