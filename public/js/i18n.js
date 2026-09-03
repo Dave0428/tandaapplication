@@ -95,3 +95,4 @@ function t(k, vars){
   return s;
 }
 function L(pair){ return S.data.lang === 'tl' ? pair[1] : pair[0]; }
+    
