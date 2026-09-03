@@ -38,9 +38,11 @@ var UI = {
     signIn:'Sign in to save my progress', signOut:'Sign out', syncOn:'Progress is saved to your account',
     syncOff:'Progress is only on this phone', email:'Email', password:'Password', createAcc:'Create an account',
     haveAcc:'I already have an account', accountT:'My account', offlineOk:'Continue without an account',
-    serverBad:'Cannot reach the server. Check that it is running.', badLogin:'Wrong email or password.',
+    serverBad:'Cannot reach the server. Check that it is running.\nTrying:', badLogin:'Wrong email or password.',
     taken:'That email is already used.', shortPw:'Password must be at least 8 characters.',
-    signedInAs:'Signed in as', lastSync:'Last saved'
+    signedInAs:'Signed in as', lastSync:'Last saved',
+    pleaseWait:'Please wait…', stillWaiting:'The server is taking a while to wake up. Please try again — it should be faster this time.',
+    showPass:'Show', hidePass:'Hide'
   },
   tl:{
     hi:'Kumusta,', friend:'Kaibigan', play:'Maglaro', learn:'Matuto', today:'Ngayon',
@@ -80,9 +82,11 @@ var UI = {
     signIn:'Mag-sign in para ma-save ang progreso', signOut:'Mag-sign out', syncOn:'Naka-save sa account mo ang progreso',
     syncOff:'Nasa telepono lang ang progreso', email:'Email', password:'Password', createAcc:'Gumawa ng account',
     haveAcc:'May account na ako', accountT:'Aking account', offlineOk:'Magpatuloy nang walang account',
-    serverBad:'Hindi maabot ang server. Tingnan kung bukas ito.', badLogin:'Mali ang email o password.',
+    serverBad:'Hindi maabot ang server. Tingnan kung bukas ito.\nSinusubukan:', badLogin:'Mali ang email o password.',
     taken:'Gamit na ang email na iyan.', shortPw:'Kailangan 8 letra man lang ang password.',
-    signedInAs:'Naka-sign in bilang', lastSync:'Huling na-save'
+    signedInAs:'Naka-sign in bilang', lastSync:'Huling na-save',
+    pleaseWait:'Sandali lang…', stillWaiting:'Matagal magising ang server. Subukan ulit — mas mabilis na ito sa susunod.',
+    showPass:'Ipakita', hidePass:'Itago'
   }
 };
 function t(k, vars){
@@ -91,3 +95,4 @@ function t(k, vars){
   return s;
 }
 function L(pair){ return S.data.lang === 'tl' ? pair[1] : pair[0]; }
+    
