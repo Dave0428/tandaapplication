@@ -192,13 +192,16 @@ function sendAsk(text){
       var b = document.getElementById('bub'+idx);
       if(b){ b.textContent = u.text; scrollChat(); }
     }
-  }).then(function(r){
+}).then(function(r){
     chat[idx] = {role:'ai', text:r.text};
     render();
   }).catch(function(e){
-    chat[idx] = {role:'ai', text: e && e.text ? e.text : t('aiErr')};
+    var detail = '';
+    try{ detail = '\n\n[debug: ' + (e && (e.code || e.message || JSON.stringify(e))) + ']'; }catch(_){ detail = '\n\n[debug: unknown error shape]'; }
+    chat[idx] = {role:'ai', text: (e && e.text ? e.text : t('aiErr')) + detail};
     render();
   });
+}
 }
 
 /* in-tutorial AI */
