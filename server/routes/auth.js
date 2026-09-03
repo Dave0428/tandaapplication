@@ -34,7 +34,7 @@ router.post('/register', (req, res) => {
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error:'bad email', msgKey:'badLogin' });
   if(password.length < 8) return res.status(400).json({ error:'short password', msgKey:'shortPw' });
 
-  const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const exists = await db.get('SELECT id FROM users WHERE email = ?', [email]);
   if(exists) return res.status(409).json({ error:'email taken', msgKey:'taken' });
 
   // 10 rounds is the usual balance of safety and speed on a small server.
