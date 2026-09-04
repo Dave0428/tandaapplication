@@ -21,8 +21,14 @@ self.addEventListener('activate', function(e){
 
 self.addEventListener('fetch', function(e){
   var url = new URL(e.request.url);
-  /* never cache the API: progress and AI answers must be live */
+  /* never cache the API: progress and AI answers must be live.
+     never touch .apk downloads either — a large binary file is exactly
+     the kind of request that can fail inside a service worker's fetch
+     handling, and the fallback-to-index.html below would then silently
+     hand back the app's home screen instead of the file someone is
+     trying to download. Let the browser fetch these directly. */
   if(url.pathname.indexOf('/api/') === 0) return;
+  if(url.pathname.slice(-4).toLowerCase() === '.apk') return;
   e.respondWith(
     caches.match(e.request).then(function(hit){
       return hit || fetch(e.request).catch(function(){ return caches.match('index.html'); });
