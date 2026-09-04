@@ -81,8 +81,7 @@ var GAMES = [
   {id:'match', icon:'🀄', tk:'matchT', sk:'matchS'},
   {id:'puzzle', icon:'🔢', tk:'puzT', sk:'puzS'},
   {id:'word', icon:'🔤', tk:'wordT', sk:'wordS'},
-  {id:'math', icon:'➕', tk:'mathT', sk:'mathS'},
-  {id:'trivia', icon:'✨', tk:'triviaT', sk:'triviaS', ai:true}
+  {id:'math', icon:'➕', tk:'mathT', sk:'mathS'}
 ];
 function viewGames(){
   return '<div class="scroll">' + head(t('games'),'home')
