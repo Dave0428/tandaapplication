@@ -54,7 +54,7 @@ function isListening(){ return listening; }
    was long enough) or because stopListening() was called. */
 function startListening(onLive, onEnd, onDebug){
   if(listening) return;
-  var langTag = S.data.lang === 'tl' ? 'tl-PH' : 'en-US';
+  var langTag = S.data.lang === 'tl' ? 'fil-PH' : 'en-US';
   var native = nativeSTT();
 
   if(native){
