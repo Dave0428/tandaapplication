@@ -39,27 +39,18 @@ function startListening(onLive, onEnd, onDebug){
       if(stopped) return;
       stopped = true;
       listening = false;
-      activeNativeHandles.forEach(function(h){ try{ h.remove(); }catch(e){} });
-      activeNativeHandles = [];
       if(onEnd) onEnd();
     };
+    var promptText = S.data.lang === 'tl' ? 'Magsalita ka...' : 'Speak now...';
     native.requestPermissions().then(function(perm){
       if(onDebug) onDebug('permission: ' + JSON.stringify(perm));
-      return Promise.all([
-        native.addListener('partialResults', function(data){
-          if(onDebug) onDebug('partialResults: ' + JSON.stringify(data));
-          var text = data && data.matches && data.matches[0];
-          if(text) onLive(text);
-        }),
-        native.addListener('listeningState', function(data){
-          if(onDebug) onDebug('listeningState: ' + JSON.stringify(data));
-          if(data && data.status === 'stopped') finish();
-        })
-      ]);
-    }).then(function(handles){
-      activeNativeHandles = handles;
-      // popup must be false for partialResults to actually stream on Android.
-      return native.start({ language: langTag, maxResults: 1, partialResults: true, popup: false });
+      // A headless (popup:false) attempt produced no results at all on
+      // test devices — some Android builds only run speech recognition
+      // reliably through the system's own listening dialog. Using that
+      // dialog (popup:true) trades away live streaming into the box for
+      // something that actually works: the phone shows its own "Speak
+      // now" screen, and the recognized phrase comes back once it closes.
+      return native.start({ language: langTag, maxResults: 1, prompt: promptText, partialResults: false, popup: true });
     }).then(function(res){
       if(onDebug) onDebug('start resolved: ' + JSON.stringify(res));
       var text = res && res.matches && res.matches[0];
