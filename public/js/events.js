@@ -97,33 +97,20 @@ shell.addEventListener('click', function(ev){
   if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
-    if(a === 'mic'){
+  if(a === 'mic'){
     if(!sttSupported()) return;
     var micBtn = el;
     if(isListening()){ stopListening(); return; }
     var ta = document.getElementById('askIn');
     var basePrefix = ta && ta.value ? ta.value + ' ' : '';
-    micBtn.textContent = '⏺️';
-
-    // TEMPORARY debug banner so we can see exactly what the native plugin
-    // is doing without needing a connected computer. Remove once voice
-    // input is confirmed working.
-    var dbg = document.getElementById('micDebug');
-    if(!dbg){
-      dbg = document.createElement('div');
-      dbg.id = 'micDebug';
-      dbg.style.cssText = 'position:fixed;left:8px;right:8px;bottom:80px;z-index:9999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;max-height:40vh;overflow:auto;white-space:pre-wrap';
-      document.body.appendChild(dbg);
-    }
-    dbg.textContent = '';
-    function logDbg(line){ dbg.textContent += line + '\n\n'; dbg.scrollTop = dbg.scrollHeight; }
+    micBtn.textContent = '\u23FA\uFE0F';
 
     // Short phrases sometimes get echoed twice by Android's own speech
     // engine before it settles ("check" -> "check check") — this is a
     // known quirk of the recognizer itself, not something the app is
     // doing. Collapse an exact A-A repeat into a single A before showing it.
     function dedupeRepeat(text){
-      var words = text.trim().split(/\s+/);
+      var words = String(text).trim().split(/\s+/);
       var n = words.length;
       if(n >= 2 && n % 2 === 0){
         var half = n / 2;
@@ -135,10 +122,15 @@ shell.addEventListener('click', function(ev){
     }
 
     startListening(function(liveText){
-      if(ta) ta.value = basePrefix + dedupeRepeat(liveText);
+      var box = document.getElementById('askIn') || ta;
+      if(box){
+        box.value = basePrefix + dedupeRepeat(liveText);
+        try{ box.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
+      }
     }, function(){
-      micBtn.textContent = '🎤';
-    }, logDbg);
+      var mb = document.querySelector('[data-act="mic"]') || micBtn;
+      if(mb) mb.textContent = '\uD83C\uDFA4';
+    });
     return;
   }
 
