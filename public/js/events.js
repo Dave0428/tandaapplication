@@ -97,7 +97,7 @@ shell.addEventListener('click', function(ev){
   if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
-  if(a === 'mic'){
+    if(a === 'mic'){
     if(!sttSupported()) return;
     var micBtn = el;
     if(isListening()){ stopListening(); return; }
@@ -118,13 +118,30 @@ shell.addEventListener('click', function(ev){
     dbg.textContent = '';
     function logDbg(line){ dbg.textContent += line + '\n\n'; dbg.scrollTop = dbg.scrollHeight; }
 
+    // Short phrases sometimes get echoed twice by Android's own speech
+    // engine before it settles ("check" -> "check check") — this is a
+    // known quirk of the recognizer itself, not something the app is
+    // doing. Collapse an exact A-A repeat into a single A before showing it.
+    function dedupeRepeat(text){
+      var words = text.trim().split(/\s+/);
+      var n = words.length;
+      if(n >= 2 && n % 2 === 0){
+        var half = n / 2;
+        var firstHalf = words.slice(0, half).join(' ').toLowerCase();
+        var secondHalf = words.slice(half).join(' ').toLowerCase();
+        if(firstHalf === secondHalf) return words.slice(0, half).join(' ');
+      }
+      return text;
+    }
+
     startListening(function(liveText){
-      if(ta) ta.value = basePrefix + liveText;
+      if(ta) ta.value = basePrefix + dedupeRepeat(liveText);
     }, function(){
       micBtn.textContent = '🎤';
     }, logDbg);
     return;
   }
+
   if(a === 'send'){ var ta = document.getElementById('askIn'); var txt = ta ? ta.value : ''; if(ta) ta.value=''; sendAsk(txt); return; }
   if(a === 'chip'){ sendAsk(t('suggest'+arg)); return; }
 
