@@ -18,29 +18,50 @@ function browserSTTCtor(){
 function sttSupported(){ return !!(nativeSTT() || browserSTTCtor()); }
 
 var listening = false;
+var activeRec = null;             // the browser SpeechRecognition instance, while listening
+var activeNativeHandles = [];     // native plugin listener handles, while listening
 function isListening(){ return listening; }
 
-/* onResult(text) fires once with whatever was heard. onEnd() always fires
-   when listening stops, whether that went well or not — the caller uses
-   it to put the microphone button back to normal. */
-function startListening(onResult, onEnd){
+/* onLive(text) fires again and again WHILE someone is talking — each call
+   carries the whole phrase recognized so far, not just the newest word,
+   so the caller should replace the box's content, not append to it.
+   onEnd() fires once, whenever listening truly stops — naturally (a pause
+   was long enough) or because stopListening() was called. */
+function startListening(onLive, onEnd){
   if(listening) return;
   var langTag = S.data.lang === 'tl' ? 'tl-PH' : 'en-US';
   var native = nativeSTT();
 
   if(native){
     listening = true;
-    var finish = function(text){
+    var stopped = false;
+    var finish = function(){
+      if(stopped) return;
+      stopped = true;
       listening = false;
-      if(text) onResult(text);
+      activeNativeHandles.forEach(function(h){ try{ h.remove(); }catch(e){} });
+      activeNativeHandles = [];
       if(onEnd) onEnd();
     };
     native.requestPermissions().then(function(){
-      return native.start({ language: langTag, maxResults: 1, partialResults: false, popup: false });
+      return Promise.all([
+        native.addListener('partialResults', function(data){
+          var text = data && data.matches && data.matches[0];
+          if(text) onLive(text);
+        }),
+        native.addListener('listeningState', function(data){
+          if(data && data.status === 'stopped') finish();
+        })
+      ]);
+    }).then(function(handles){
+      activeNativeHandles = handles;
+      // popup must be false for partialResults to actually stream on Android.
+      return native.start({ language: langTag, maxResults: 1, partialResults: true, popup: false });
     }).then(function(res){
       var text = res && res.matches && res.matches[0];
-      finish(text || null);
-    }).catch(function(){ finish(null); });
+      if(text) onLive(text);
+      finish();
+    }).catch(function(){ finish(); });
     return;
   }
 
@@ -48,15 +69,25 @@ function startListening(onResult, onEnd){
   if(!Ctor){ if(onEnd) onEnd(); return; }
   var rec = new Ctor();
   rec.lang = langTag;
-  rec.interimResults = false;
+  rec.interimResults = true;
+  rec.continuous = true;
   rec.maxAlternatives = 1;
   listening = true;
+  activeRec = rec;
   rec.onresult = function(e){
-    var text = e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript;
-    if(text) onResult(text);
+    var text = '';
+    for(var i=0;i<e.results.length;i++) text += e.results[i][0].transcript;
+    if(text) onLive(text);
   };
-  rec.onend = function(){ listening = false; if(onEnd) onEnd(); };
-  try{ rec.start(); }catch(e){ listening = false; if(onEnd) onEnd(); }
+  rec.onend = function(){ listening = false; activeRec = null; if(onEnd) onEnd(); };
+  try{ rec.start(); }catch(e){ listening = false; activeRec = null; if(onEnd) onEnd(); }
+}
+
+/* Lets the mic button double as a manual stop while someone is mid-sentence. */
+function stopListening(){
+  var native = nativeSTT();
+  if(native){ try{ native.stop(); }catch(e){} return; }
+  if(activeRec){ try{ activeRec.stop(); }catch(e){} }
 }
 
 /* ---------- voice ---------- */
@@ -228,5 +259,4 @@ function readAll(items){
       if(node){ node.classList.add('reading'); node.scrollIntoView({block:'center', behavior:'smooth'}); }
     }
   }, function(){ stopSpeak(); });
-    }
-    
+}
