@@ -42,6 +42,27 @@ function startListening(onLive, onEnd, onDebug){
       if(onEnd) onEnd();
     };
     var promptText = S.data.lang === 'tl' ? 'Magsalita ka...' : 'Speak now...';
+
+    /* The dialog can close in a way that rejects the start() promise even
+       though the phone already recognized the phrase — on Android a
+       cancelled activity comes back as plain 0. So we also listen for
+       partial results and keep the last thing we heard as a fallback. */
+    var lastHeard = '';
+    var partialHandle = null;
+    try{
+      partialHandle = native.addListener('partialResults', function(data){
+        var m = data && (data.matches || data.value);
+        var txt = Array.isArray(m) ? m[0] : m;
+        if(txt){ lastHeard = String(txt); if(onDebug) onDebug('partial: ' + lastHeard); }
+      });
+    }catch(e){}
+    var cleanup = function(){
+      try{
+        if(partialHandle && partialHandle.remove) partialHandle.remove();
+        else if(partialHandle && partialHandle.then) partialHandle.then(function(h){ h.remove(); });
+      }catch(e){}
+    };
+
     native.requestPermissions().then(function(perm){
       if(onDebug) onDebug('permission: ' + JSON.stringify(perm));
       // A headless (popup:false) attempt produced no results at all on
@@ -53,11 +74,31 @@ function startListening(onLive, onEnd, onDebug){
       return native.start({ language: langTag, maxResults: 1, prompt: promptText, partialResults: false, popup: true });
     }).then(function(res){
       if(onDebug) onDebug('start resolved: ' + JSON.stringify(res));
-      var text = res && res.matches && res.matches[0];
+      var m = res && (res.matches || res.value || res.results);
+      var text = Array.isArray(m) ? m[0] : (typeof m === 'string' ? m : '');
+      if(!text && lastHeard) text = lastHeard;
+      if(onDebug) onDebug('text: [' + text + ']');
       if(text) onLive(text);
+      cleanup();
       finish();
     }).catch(function(err){
-      if(onDebug) onDebug('error: ' + (err && (err.message || JSON.stringify(err))));
+      /* Do NOT collapse this into (err && err.message) — a rejection value
+         of 0 is falsy, so that pattern silently printed "0" and hid
+         everything useful. Print the shape of whatever came back. */
+      if(onDebug){
+        var j = '?';
+        try{ j = JSON.stringify(err); }catch(e){}
+        onDebug('rejected. type=' + (typeof err)
+          + ' value=' + String(err)
+          + ' json=' + j
+          + ' keys=' + (err && typeof err === 'object' ? Object.keys(err).join(',') : '-')
+          + ' msg=' + ((err && (err.message || err.errorMessage)) || '-'));
+      }
+      if(lastHeard){
+        if(onDebug) onDebug('ginamit ang partial: ' + lastHeard);
+        onLive(lastHeard);
+      }
+      cleanup();
       finish();
     });
     return;
@@ -257,4 +298,5 @@ function readAll(items){
       if(node){ node.classList.add('reading'); node.scrollIntoView({block:'center', behavior:'smooth'}); }
     }
   }, function(){ stopSpeak(); });
-}
+                           }
+     
