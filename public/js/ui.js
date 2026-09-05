@@ -4,7 +4,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&
 
 function render(){
   var v = '';
-  if(!S.data.name) v = viewWelcome();
+  if(!S.data.name && S.screen !== 'account') v = viewWelcome();
   else if(S.screen === 'home') v = viewHome();
   else if(S.screen === 'games') v = viewGames();
   else if(S.screen === 'game') v = viewGame();
@@ -169,6 +169,7 @@ function viewAsk(){
       + '<button class="chip" data-act="chip" data-arg="3">'+esc(t('suggest3'))+'</button>'
     + '</div>'
     + '<div class="composer"><textarea id="askIn" rows="1" placeholder="'+esc(t('typeHere'))+'"></textarea>'
+    + (sttSupported() ? '<button class="send ghost" data-act="mic" aria-label="'+esc(t('voiceInput'))+'">🎤</button>' : '')
     + '<button class="send" data-act="send" aria-label="'+esc(t('send'))+'">➤</button></div>'
     + '</div>' + nav('ask');
 }
@@ -191,17 +192,18 @@ function sendAsk(text){
       var b = document.getElementById('bub'+idx);
       if(b){ b.textContent = u.text; scrollChat(); }
     }
-}).then(function(r){
+  }).then(function(r){
     chat[idx] = {role:'ai', text:r.text};
     render();
   }).catch(function(e){
+    // Temporary: show the real reason instead of only the generic message,
+    // so a stuck "Something went wrong" can actually be diagnosed on-device.
     var detail = '';
     try{ detail = '\n\n[debug: ' + (e && (e.code || e.message || JSON.stringify(e))) + ']'; }catch(_){ detail = '\n\n[debug: unknown error shape]'; }
     chat[idx] = {role:'ai', text: (e && e.text ? e.text : t('aiErr')) + detail};
     render();
   });
 }
-
 
 /* in-tutorial AI */
 function tutorialAi(mode){
