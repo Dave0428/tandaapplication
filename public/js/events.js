@@ -104,11 +104,25 @@ shell.addEventListener('click', function(ev){
     var ta = document.getElementById('askIn');
     var basePrefix = ta && ta.value ? ta.value + ' ' : '';
     micBtn.textContent = '⏺️';
+
+    // TEMPORARY debug banner so we can see exactly what the native plugin
+    // is doing without needing a connected computer. Remove once voice
+    // input is confirmed working.
+    var dbg = document.getElementById('micDebug');
+    if(!dbg){
+      dbg = document.createElement('div');
+      dbg.id = 'micDebug';
+      dbg.style.cssText = 'position:fixed;left:8px;right:8px;bottom:80px;z-index:9999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;max-height:40vh;overflow:auto;white-space:pre-wrap';
+      document.body.appendChild(dbg);
+    }
+    dbg.textContent = '';
+    function logDbg(line){ dbg.textContent += line + '\n\n'; dbg.scrollTop = dbg.scrollHeight; }
+
     startListening(function(liveText){
       if(ta) ta.value = basePrefix + liveText;
     }, function(){
       micBtn.textContent = '🎤';
-    });
+    }, logDbg);
     return;
   }
   if(a === 'send'){ var ta = document.getElementById('askIn'); var txt = ta ? ta.value : ''; if(ta) ta.value=''; sendAsk(txt); return; }
@@ -285,4 +299,4 @@ function bigReader(){
   render();
 }
 
-     
+      
