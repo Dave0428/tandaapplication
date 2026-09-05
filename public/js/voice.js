@@ -54,7 +54,7 @@ function isListening(){ return listening; }
    was long enough) or because stopListening() was called. */
 function startListening(onLive, onEnd, onDebug){
   if(listening) return;
-  var langTag = S.data.lang === 'tl' ? 'fil-PH' : 'en-US';
+  var langTag = S.data.lang === 'tl' ? 'tl-PH' : 'en-US';
   var native = nativeSTT();
 
   if(native){
@@ -257,13 +257,32 @@ function nativeSpeakList(tts, texts, onIndex, onDone){
     if(i >= texts.length){ if(onDone) onDone(); else setReadBtn(false); return; }
     if(onIndex) onIndex(i);
     var txt = texts[i]; i++;
-    tts.speak({
-      text: txt,
-      lang: S.data.lang === 'tl' ? 'fil-PH' : 'en-US',
-      rate: Number(S.data.rate) || .85,
-      pitch: 1, volume: 1,
-      category: 'ambient'
-    }).then(step).catch(function(){ if(token === readToken) step(); });
+
+    /* Plenty of phones ship with no Filipino voice at all. Asking for
+       fil-PH there fails, and the old code quietly moved on to the next
+       line — so the whole tutorial played back as silence with nothing
+       on screen to explain why. Fall back to the English voice reading
+       the Tagalog text: an accent is far better than saying nothing. */
+    function say(lang, onFail){
+      tts.speak({
+        text: txt,
+        lang: lang,
+        rate: Number(S.data.rate) || .85,
+        pitch: 1, volume: 1,
+        category: 'ambient'
+      }).then(step).catch(function(){
+        if(token !== readToken) return;
+        if(onFail) onFail(); else step();
+      });
+    }
+
+    if(S.data.lang === 'tl'){
+      say('fil-PH', function(){
+        say('en-US');   // no Filipino voice on this phone — read it anyway
+      });
+    }else{
+      say('en-US');
+    }
   }
   step();
 }
@@ -324,5 +343,4 @@ function readAll(items){
     }
   }, function(){ stopSpeak(); });
                            }
-
      
