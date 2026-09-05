@@ -17,7 +17,7 @@ var UI = {
     matchT:'Tile Match', matchS:'Find the matching pairs', puzT:'Number Slide', puzS:'Put 1 to 8 in order',
     wordT:'Word Builder', wordS:'Spell the hidden word', triviaT:'AI Quiz', triviaS:'Fresh questions every time',
     mathT:'Quick Numbers', mathS:'Simple everyday math',
-    typeHere:'Type your question…', send:'Send', thinking:'Thinking…',
+    typeHere:'Type your question…', send:'Send', thinking:'Thinking…', voiceInput:'Speak your question',
     aiOff:'The AI helper is not available on this screen. All the guides and games still work.',
     aiErr:'Something went wrong. Please try again.',
     hint:'Hint', check:'Check', clear:'Clear', next:'Next',
@@ -61,7 +61,7 @@ var UI = {
     matchT:'Tugmang Tile', matchS:'Hanapin ang magkapares', puzT:'Sunod-sunod na Numero', puzS:'Ayusin ang 1 hanggang 8',
     wordT:'Buuin ang Salita', wordS:'Hulaan ang nakatagong salita', triviaT:'AI Pagsusulit', triviaS:'Bagong tanong sa tuwing maglalaro',
     mathT:'Bilang Bilis', mathS:'Simpleng matematika',
-    typeHere:'I-type ang tanong mo…', send:'Ipadala', thinking:'Nag-iisip…',
+    typeHere:'I-type ang tanong mo…', send:'Ipadala', thinking:'Nag-iisip…', voiceInput:'Sabihin ang tanong mo',
     aiOff:'Hindi available ang AI helper sa screen na ito. Gumagana pa rin ang lahat ng gabay at laro.',
     aiErr:'May naganap na problema. Subukan ulit.',
     hint:'Pahiwatig', check:'Tingnan', clear:'Burahin', next:'Susunod',
@@ -95,4 +95,3 @@ function t(k, vars){
   return s;
 }
 function L(pair){ return S.data.lang === 'tl' ? pair[1] : pair[0]; }
-    
