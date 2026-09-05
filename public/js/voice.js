@@ -15,7 +15,32 @@ function nativeSTT(){
 function browserSTTCtor(){
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
-function sttSupported(){ return !!(nativeSTT() || browserSTTCtor()); }
+/* Having the plugin installed is not the same as the phone being able to
+   listen. Some units have no Google app, or a stripped-down ROM with no
+   speech service at all. So we ask the phone itself once and hide the
+   microphone button when the answer is no — better than an older user
+   tapping a button that quietly does nothing. Typing still works. */
+var STT_OK = null;   /* null = not asked yet, true/false = the phone's answer */
+function sttSupported(){
+  if(nativeSTT()) return STT_OK !== false;
+  return !!browserSTTCtor();
+}
+function checkSTT(){
+  var n = nativeSTT();
+  if(!n) return;
+  if(!n.available){ STT_OK = true; return; }
+  n.available().then(function(r){
+    var ok = (r && typeof r.available !== 'undefined') ? !!r.available : !!r;
+    if(ok === STT_OK) return;
+    STT_OK = ok;
+    /* the Ask screen may already be drawn with the button on it */
+    try{ if(typeof render === 'function' && S.screen === 'ask') render(); }catch(e){}
+  }).catch(function(){ STT_OK = false; });
+}
+/* Capacitor injects its bridge very early, but not always before this file
+   parses — so ask twice and let the second call correct the first. */
+setTimeout(checkSTT, 0);
+setTimeout(checkSTT, 1500);
 
 var listening = false;
 var activeRec = null;             // the browser SpeechRecognition instance, while listening
@@ -299,4 +324,5 @@ function readAll(items){
     }
   }, function(){ stopSpeak(); });
                            }
+
      
