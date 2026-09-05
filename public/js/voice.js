@@ -1,3 +1,64 @@
+/* ---------- voice input (speech-to-text) ----------
+   Same two-engine pattern as the text-to-speech section below:
+   1. Capacitor's native speech recognition plugin, inside the real app —
+      this is the one that actually matters, since the browser's own
+      SpeechRecognition rarely works inside an Android WebView even when
+      the API object exists.
+   2. The browser's own SpeechRecognition, for testing on a computer.
+   sttSupported() tells the UI whether to even draw the microphone button. */
+function nativeSTT(){
+  if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition){
+    return window.Capacitor.Plugins.SpeechRecognition;
+  }
+  return null;
+}
+function browserSTTCtor(){
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+function sttSupported(){ return !!(nativeSTT() || browserSTTCtor()); }
+
+var listening = false;
+function isListening(){ return listening; }
+
+/* onResult(text) fires once with whatever was heard. onEnd() always fires
+   when listening stops, whether that went well or not — the caller uses
+   it to put the microphone button back to normal. */
+function startListening(onResult, onEnd){
+  if(listening) return;
+  var langTag = S.data.lang === 'tl' ? 'tl-PH' : 'en-US';
+  var native = nativeSTT();
+
+  if(native){
+    listening = true;
+    var finish = function(text){
+      listening = false;
+      if(text) onResult(text);
+      if(onEnd) onEnd();
+    };
+    native.requestPermissions().then(function(){
+      return native.start({ language: langTag, maxResults: 1, partialResults: false, popup: false });
+    }).then(function(res){
+      var text = res && res.matches && res.matches[0];
+      finish(text || null);
+    }).catch(function(){ finish(null); });
+    return;
+  }
+
+  var Ctor = browserSTTCtor();
+  if(!Ctor){ if(onEnd) onEnd(); return; }
+  var rec = new Ctor();
+  rec.lang = langTag;
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  listening = true;
+  rec.onresult = function(e){
+    var text = e.results && e.results[0] && e.results[0][0] && e.results[0][0].transcript;
+    if(text) onResult(text);
+  };
+  rec.onend = function(){ listening = false; if(onEnd) onEnd(); };
+  try{ rec.start(); }catch(e){ listening = false; if(onEnd) onEnd(); }
+}
+
 /* ---------- voice ---------- */
 var VOICES = [];
 var VOICE_OK = null;      /* null = not tried yet, true = heard, false = blocked */
@@ -55,7 +116,7 @@ function updateVoiceUi(){
   if(box) box.innerHTML = voiceStatusHtml();
 }
 function voiceStatusHtml(){
-  if(nativeTTS()) return '';   // real Android/iOS voice is available
+  if(nativeTTS()) return '';   // real Android/iOS voice is available — the browser check below does not apply
   if(!ttsSupported() || VOICE_OK === false){
     var why = !ttsSupported() ? t('voiceNone')
             : (VOICES.length ? t('voiceBlocked') : t('voiceNone'));
@@ -167,4 +228,5 @@ function readAll(items){
       if(node){ node.classList.add('reading'); node.scrollIntoView({block:'center', behavior:'smooth'}); }
     }
   }, function(){ stopSpeak(); });
-}
+    }
+    
