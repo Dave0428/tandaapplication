@@ -97,6 +97,21 @@ shell.addEventListener('click', function(ev){
   if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
+  if(a === 'mic'){
+    if(!sttSupported() || isListening()) return;
+    var micBtn = el;
+    var original = micBtn.textContent;
+    micBtn.textContent = '⏺️';
+    micBtn.disabled = true;
+    startListening(function(text){
+      var ta = document.getElementById('askIn');
+      if(ta) ta.value = (ta.value ? ta.value + ' ' : '') + text;
+    }, function(){
+      micBtn.textContent = original;
+      micBtn.disabled = false;
+    });
+    return;
+  }
   if(a === 'send'){ var ta = document.getElementById('askIn'); var txt = ta ? ta.value : ''; if(ta) ta.value=''; sendAsk(txt); return; }
   if(a === 'chip'){ sendAsk(t('suggest'+arg)); return; }
 
@@ -271,3 +286,4 @@ function bigReader(){
   render();
 }
 
+      
