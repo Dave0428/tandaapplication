@@ -27,7 +27,7 @@ function isListening(){ return listening; }
    so the caller should replace the box's content, not append to it.
    onEnd() fires once, whenever listening truly stops — naturally (a pause
    was long enough) or because stopListening() was called. */
-function startListening(onLive, onEnd){
+function startListening(onLive, onEnd, onDebug){
   if(listening) return;
   var langTag = S.data.lang === 'tl' ? 'tl-PH' : 'en-US';
   var native = nativeSTT();
@@ -43,13 +43,16 @@ function startListening(onLive, onEnd){
       activeNativeHandles = [];
       if(onEnd) onEnd();
     };
-    native.requestPermissions().then(function(){
+    native.requestPermissions().then(function(perm){
+      if(onDebug) onDebug('permission: ' + JSON.stringify(perm));
       return Promise.all([
         native.addListener('partialResults', function(data){
+          if(onDebug) onDebug('partialResults: ' + JSON.stringify(data));
           var text = data && data.matches && data.matches[0];
           if(text) onLive(text);
         }),
         native.addListener('listeningState', function(data){
+          if(onDebug) onDebug('listeningState: ' + JSON.stringify(data));
           if(data && data.status === 'stopped') finish();
         })
       ]);
@@ -58,10 +61,14 @@ function startListening(onLive, onEnd){
       // popup must be false for partialResults to actually stream on Android.
       return native.start({ language: langTag, maxResults: 1, partialResults: true, popup: false });
     }).then(function(res){
+      if(onDebug) onDebug('start resolved: ' + JSON.stringify(res));
       var text = res && res.matches && res.matches[0];
       if(text) onLive(text);
       finish();
-    }).catch(function(){ finish(); });
+    }).catch(function(err){
+      if(onDebug) onDebug('error: ' + (err && (err.message || JSON.stringify(err))));
+      finish();
+    });
     return;
   }
 
