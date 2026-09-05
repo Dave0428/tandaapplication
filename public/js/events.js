@@ -98,17 +98,16 @@ shell.addEventListener('click', function(ev){
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
   if(a === 'mic'){
-    if(!sttSupported() || isListening()) return;
+    if(!sttSupported()) return;
     var micBtn = el;
-    var original = micBtn.textContent;
+    if(isListening()){ stopListening(); return; }
+    var ta = document.getElementById('askIn');
+    var basePrefix = ta && ta.value ? ta.value + ' ' : '';
     micBtn.textContent = '⏺️';
-    micBtn.disabled = true;
-    startListening(function(text){
-      var ta = document.getElementById('askIn');
-      if(ta) ta.value = (ta.value ? ta.value + ' ' : '') + text;
+    startListening(function(liveText){
+      if(ta) ta.value = basePrefix + liveText;
     }, function(){
-      micBtn.textContent = original;
-      micBtn.disabled = false;
+      micBtn.textContent = '🎤';
     });
     return;
   }
@@ -286,4 +285,4 @@ function bigReader(){
   render();
 }
 
-      
+     
