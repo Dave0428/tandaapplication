@@ -1,14 +1,3 @@
-# Builds an installable APK in the cloud. You do NOT need Android Studio.
-#
-# How to use it:
-#   1. Push this project to GitHub.
-#   2. Open the "Actions" tab on your repository.
-#   3. Choose "Build Android APK" and press "Run workflow".
-#   4. Wait about 5 minutes, then download "TANDA" at the bottom of the run.
-#   5. Send that file to a phone and open it.
-#
-# It also runs by itself on every push to main.
-
 name: Build Android APK
 
 on:
@@ -40,9 +29,28 @@ jobs:
           if [ ! -d "android" ]; then
             npx cap add android
           fi
+
       - name: Generate the app icon from docs/assets/icon.png
         run: npx @capacitor/assets generate --android --assetPath docs/assets
-        
+
+      - name: Let Android see the apps TANDA can open
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('android/app/src/main/AndroidManifest.xml')
+          x = p.read_text()
+          if '<queries>' in x:
+              print('queries already present'); raise SystemExit
+          schemes = ['fb-messenger','fb','vnd.youtube','gcash','viber','whatsapp',
+                     'googlegmail','geo','tiktok','shopeeph','lazada','tel','https']
+          block = '  <queries>\n' + ''.join(
+              '    <intent><action android:name="android.intent.action.VIEW" />'
+              '<data android:scheme="%s" /></intent>\n' % s for s in schemes
+          ) + '  </queries>\n'
+          x = x.replace('</manifest>', block + '</manifest>')
+          p.write_text(x)
+          print('added queries for', len(schemes), 'schemes')
+          PY
 
       - name: Copy the web app into the Android project
         run: npx cap sync android
