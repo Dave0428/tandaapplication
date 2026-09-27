@@ -422,4 +422,29 @@ function runVoiceCommand(said){
        Messenger" gets the guide. */
     var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
                      || s.indexOf('?') >= 0;
-    if(!wantsOpen && isQuesti
+    if(!wantsOpen && isQuestion) continue;
+    try{ speakOne(t('openingApp', {app: t(app.key)})); }catch(e){}
+    /* The spoken line runs first. Leaving for another app mid-sentence
+       makes the phone look like it ignored them. */
+    setTimeout(function(a){ return function(){ launchApp(a); }; }(app), 1100);
+    return true;
+  }
+
+  /* In-app moves. Saying where you want to go should take you there. */
+  var goes = [
+    {words:['games','laro','maglaro'], screen:'games'},
+    {words:['learn','gabay','aral','tutorial'], screen:'learn'},
+    {words:['home','bahay','simula'], screen:'home'},
+    {words:['settings','setting','ayos'], screen:'me'}
+  ];
+  if(wantsOpen || /^(pumunta|punta|go)\b/.test(s)){
+    for(var g=0; g<goes.length; g++){
+      if(goes[g].words.some(function(w){ return s.indexOf(w) >= 0; })){
+        stopSpeak();
+        S.screen = goes[g].screen; S.modal = null; render();
+        return true;
+      }
+    }
+  }
+  return false;
+}
