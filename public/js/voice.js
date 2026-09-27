@@ -15,32 +15,7 @@ function nativeSTT(){
 function browserSTTCtor(){
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
-/* Having the plugin installed is not the same as the phone being able to
-   listen. Some units have no Google app, or a stripped-down ROM with no
-   speech service at all. So we ask the phone itself once and hide the
-   microphone button when the answer is no — better than an older user
-   tapping a button that quietly does nothing. Typing still works. */
-var STT_OK = null;   /* null = not asked yet, true/false = the phone's answer */
-function sttSupported(){
-  if(nativeSTT()) return STT_OK !== false;
-  return !!browserSTTCtor();
-}
-function checkSTT(){
-  var n = nativeSTT();
-  if(!n) return;
-  if(!n.available){ STT_OK = true; return; }
-  n.available().then(function(r){
-    var ok = (r && typeof r.available !== 'undefined') ? !!r.available : !!r;
-    if(ok === STT_OK) return;
-    STT_OK = ok;
-    /* the Ask screen may already be drawn with the button on it */
-    try{ if(typeof render === 'function' && S.screen === 'ask') render(); }catch(e){}
-  }).catch(function(){ STT_OK = false; });
-}
-/* Capacitor injects its bridge very early, but not always before this file
-   parses — so ask twice and let the second call correct the first. */
-setTimeout(checkSTT, 0);
-setTimeout(checkSTT, 1500);
+function sttSupported(){ return !!(nativeSTT() || browserSTTCtor()); }
 
 var listening = false;
 var activeRec = null;             // the browser SpeechRecognition instance, while listening
@@ -154,6 +129,37 @@ function stopListening(){
   if(activeRec){ try{ activeRec.stop(); }catch(e){} }
 }
 
+
+/* ---------- stop bar ----------
+   While the phone is talking there has to be one obvious way to make it
+   stop. The button lives outside the app shell and carries its own click
+   handler, so it survives every redraw and works from any screen. It is
+   deliberately large and sits above the bottom navigation, where a thumb
+   already rests. */
+function stopBar(){
+  var el = document.getElementById('stopBar');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'stopBar';
+  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:78px;z-index:9000;display:none';
+  el.innerHTML = '<button id="stopBarBtn" style="width:100%;padding:16px;border:none;border-radius:16px;'
+    + 'background:#D9614F;color:#fff;font-size:1.05rem;font-weight:800;box-shadow:0 6px 18px rgba(0,0,0,.25);'
+    + 'cursor:pointer"></button>';
+  document.body.appendChild(el);
+  el.querySelector('#stopBarBtn').addEventListener('click', function(){ stopSpeak(); });
+  return el;
+}
+function showStopBar(){
+  var el = stopBar();
+  var b = el.querySelector('#stopBarBtn');
+  if(b) b.textContent = '\u23F9  ' + t('stopVoice');
+  el.style.display = 'block';
+}
+function hideStopBar(){
+  var el = document.getElementById('stopBar');
+  if(el) el.style.display = 'none';
+}
+
 /* ---------- voice ---------- */
 var VOICES = [];
 var VOICE_OK = null;      /* null = not tried yet, true = heard, false = blocked */
@@ -199,6 +205,7 @@ function setReadBtn(on){
 }
 function stopSpeak(){
   readToken++;
+  hideStopBar();
   var nat = nativeTTS();
   if(nat){ try{ nat.stop(); }catch(e){} }
   try{ window.speechSynthesis.cancel(); }catch(e){}
@@ -251,38 +258,20 @@ function nativeSpeakList(tts, texts, onIndex, onDone){
   var token = ++readToken;
   var i = 0;
   VOICE_OK = true;
+  showStopBar();
   try{ tts.stop(); }catch(e){}
   function step(){
     if(token !== readToken) return;
-    if(i >= texts.length){ if(onDone) onDone(); else setReadBtn(false); return; }
+    if(i >= texts.length){ hideStopBar(); if(onDone) onDone(); else setReadBtn(false); return; }
     if(onIndex) onIndex(i);
     var txt = texts[i]; i++;
-
-    /* Plenty of phones ship with no Filipino voice at all. Asking for
-       fil-PH there fails, and the old code quietly moved on to the next
-       line — so the whole tutorial played back as silence with nothing
-       on screen to explain why. Fall back to the English voice reading
-       the Tagalog text: an accent is far better than saying nothing. */
-    function say(lang, onFail){
-      tts.speak({
-        text: txt,
-        lang: lang,
-        rate: Number(S.data.rate) || .85,
-        pitch: 1, volume: 1,
-        category: 'ambient'
-      }).then(step).catch(function(){
-        if(token !== readToken) return;
-        if(onFail) onFail(); else step();
-      });
-    }
-
-    if(S.data.lang === 'tl'){
-      say('fil-PH', function(){
-        say('en-US');   // no Filipino voice on this phone — read it anyway
-      });
-    }else{
-      say('en-US');
-    }
+    tts.speak({
+      text: txt,
+      lang: S.data.lang === 'tl' ? 'fil-PH' : 'en-US',
+      rate: Number(S.data.rate) || .85,
+      pitch: 1, volume: 1,
+      category: 'ambient'
+    }).then(step).catch(function(){ if(token === readToken) step(); });
   }
   step();
 }
@@ -293,6 +282,7 @@ function speakList(texts, onIndex, onDone){
   if(!ttsSupported()){ VOICE_OK = false; updateVoiceUi(); return; }
   var token = ++readToken;
   var heard = false, tries = 0;
+  showStopBar();
 
   function enqueue(){
     tries++;
@@ -307,7 +297,7 @@ function speakList(texts, onIndex, onDone){
         if(token === readToken && onIndex) onIndex(i);
       };
       u.onend = function(){
-        if(token === readToken && i === texts.length - 1){ if(onDone) onDone(); else setReadBtn(false); }
+        if(token === readToken && i === texts.length - 1){ hideStopBar(); if(onDone) onDone(); else setReadBtn(false); }
       };
       u.onerror = function(e){
         var why = (e && e.error) || '';
