@@ -44,6 +44,28 @@ public class TandaSys extends Plugin {
         }
     }
 
+    /** Opens a web address, optionally forcing it to a particular app.
+     *
+     *  Opening YouTube is not the same as playing something on YouTube. The
+     *  first needs only a package name; the second needs an address with a
+     *  search in it, handed to that app rather than to a browser. Setting
+     *  the package is what keeps the request from landing in Chrome. */
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        String url = call.getString("url");
+        String pkg = call.getString("package");
+        if (url == null) { call.reject("no url"); return; }
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            if (pkg != null && !pkg.isEmpty()) i.setPackage(pkg);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("failed: " + e.getMessage());
+        }
+    }
+
     /** True when the app is on the phone. Used to tell someone their app is
      *  missing instead of leaving them with a screen that did nothing. */
     @PluginMethod
