@@ -145,10 +145,14 @@ function stopBar(){
      full-width version sat on top of whatever button came next, which on
      the walkthrough meant covering "Susunod" - the one control the person
      actually needed. */
-  el.style.cssText = 'position:fixed;right:12px;bottom:92px;z-index:9000;display:none';
-  el.innerHTML = '<button id="stopBarBtn" style="padding:12px 18px;border:none;border-radius:24px;'
-    + 'background:#D9614F;color:#fff;font-size:.95rem;font-weight:800;white-space:nowrap;'
-    + 'box-shadow:0 5px 16px rgba(0,0,0,.28);cursor:pointer"></button>';
+  /* Top centre. Every crowded part of this app is at the bottom - the
+     navigation, the Next and Back buttons, the chips - so a control that
+     floats there will always end up on top of something. The strip under
+     the status bar is the one place that is reliably free. */
+  el.style.cssText = 'position:fixed;left:0;right:0;top:8px;z-index:9000;display:none;text-align:center;pointer-events:none';
+  el.innerHTML = '<button id="stopBarBtn" style="pointer-events:auto;padding:11px 20px;border:none;'
+    + 'border-radius:24px;background:#D9614F;color:#fff;font-size:.95rem;font-weight:800;'
+    + 'white-space:nowrap;box-shadow:0 5px 16px rgba(0,0,0,.28);cursor:pointer"></button>';
   document.body.appendChild(el);
   el.querySelector('#stopBarBtn').addEventListener('click', function(){ stopSpeak(); });
   return el;
