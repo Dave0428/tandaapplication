@@ -33,23 +33,71 @@ jobs:
       - name: Generate the app icon from docs/assets/icon.png
         run: npx @capacitor/assets generate --android --assetPath docs/assets
 
-      - name: Let Android see the apps TANDA can open
+      - name: Add the native plugin and manifest entries
         run: |
           python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path('android/app/src/main/AndroidManifest.xml')
-          x = p.read_text()
-          if '<queries>' in x:
-              print('queries already present'); raise SystemExit
-          schemes = ['fb-messenger','fb','vnd.youtube','gcash','viber','whatsapp',
-                     'googlegmail','geo','tiktok','shopeeph','lazada','tel','https']
-          block = '  <queries>\n' + ''.join(
-              '    <intent><action android:name="android.intent.action.VIEW" />'
-              '<data android:scheme="%s" /></intent>\n' % s for s in schemes
-          ) + '  </queries>\n'
-          x = x.replace('</manifest>', block + '</manifest>')
-          p.write_text(x)
-          print('added queries for', len(schemes), 'schemes')
+          import pathlib, re
+
+          pkg_dir = pathlib.Path('android/app/src/main/java/ph/tanda/app')
+          pkg_dir.mkdir(parents=True, exist_ok=True)
+          plugin = pathlib.Path('tools/TandaSys.java')
+          (pkg_dir / 'TandaSys.java').write_text(plugin.read_text())
+          print('wrote TandaSys.java')
+
+          main = pkg_dir / 'MainActivity.java'
+          m = main.read_text()
+          if 'TandaSys.class' not in m:
+              if 'onCreate' in m:
+                  m = re.sub(r'(super\.onCreate\([^)]*\);)',
+                             r'\1\n        registerPlugin(TandaSys.class);', m, count=1)
+              else:
+                  m = m.replace(
+                      'public class MainActivity extends BridgeActivity {',
+                      'public class MainActivity extends BridgeActivity {\n'
+                      '    @Override\n'
+                      '    public void onCreate(android.os.Bundle savedInstanceState) {\n'
+                      '        registerPlugin(TandaSys.class);\n'
+                      '        super.onCreate(savedInstanceState);\n'
+                      '    }\n', 1)
+              main.write_text(m)
+              print('registered TandaSys in MainActivity')
+
+          mf = pathlib.Path('android/app/src/main/AndroidManifest.xml')
+          x = mf.read_text()
+
+          if '<queries>' not in x:
+              packages = [
+                'com.facebook.orca','com.facebook.katana','com.facebook.lite',
+                'com.google.android.youtube','com.globe.gcash.android',
+                'com.viber.voip','com.whatsapp','com.google.android.gm',
+                'com.google.android.apps.maps','com.zhiliaoapp.musically',
+                'com.shopee.ph','com.lazada.android','com.google.android.dialer',
+                'com.android.dialer','com.google.android.GoogleCamera',
+                'com.android.camera','com.android.camera2','com.google.android.deskclock',
+                'com.android.settings','com.google.android.apps.photos','com.android.chrome',
+              ]
+              block = '  <queries>\n'
+              for p in packages:
+                  block += '    <package android:name="%s" />\n' % p
+              block += ('    <intent><action android:name="android.intent.action.VIEW" />'
+                        '<data android:scheme="https" /></intent>\n')
+              block += ('    <intent><action android:name="android.intent.action.VIEW" />'
+                        '<data android:scheme="tel" /></intent>\n')
+              block += ('    <intent><action android:name="android.intent.action.MAIN" />'
+                        '</intent>\n')
+              block += '  </queries>\n'
+              x = x.replace('</manifest>', block + '</manifest>')
+              print('added queries')
+
+          if 'WRITE_SETTINGS' not in x:
+              x = x.replace('</manifest>',
+                '  <uses-permission android:name="android.permission.WRITE_SETTINGS" '
+                'tools:ignore="ProtectedPermissions" />\n</manifest>')
+              if 'xmlns:tools' not in x:
+                  x = x.replace('<manifest ', '<manifest xmlns:tools="http://schemas.android.com/tools" ', 1)
+              print('added WRITE_SETTINGS')
+
+          mf.write_text(x)
           PY
 
       - name: Copy the web app into the Android project
