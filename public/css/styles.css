@@ -188,3 +188,59 @@ input.t:focus,select.t:focus{outline:none;border-color:var(--teal);}
 @keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}}
 .hidden{display:none!important;}
 .scroll-x{overflow-x:auto;}
+
+/* ---------- step screenshots ----------
+   A picture of the real screen under each step. The image element is always
+   written out; if the file is not there yet, onerror hides it, so a tutorial
+   without screenshots still reads exactly as before. */
+.stepshot{
+  display:block;
+  width:100%;
+  max-width:320px;
+  margin:10px 0 2px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  box-shadow:0 2px 8px var(--tile-shadow);
+  background:var(--surface);
+}
+
+
+/* ---------- falling blocks ----------
+   The grid keeps its shape whatever the text-size slider is set to, so the
+   board never spills off a phone. The pad buttons are deliberately large:
+   this is the one screen in the app where speed matters, and a missed tap
+   costs the player a piece. */
+.block-grid{
+  display:grid;
+  gap:2px;
+  width:100%;
+  max-width:330px;
+  margin:0 auto;
+  padding:6px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:0 3px 12px var(--tile-shadow);
+  aspect-ratio:10 / 16;
+}
+.block-grid i{ display:block; border-radius:3px; }
+.block-pad{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  max-width:330px;
+  margin:16px auto 0;
+}
+.bpad{
+  font-size:1.7rem;
+  font-weight:800;
+  padding:16px 0;
+  border-radius:14px;
+  border:2px solid var(--teal);
+  background:var(--surface);
+  color:var(--teal);
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.bpad:active{ background:var(--teal); color:var(--bg); }
+.bpad.wide{ grid-column:1 / -1; font-size:1.1rem; padding:14px 0; }
