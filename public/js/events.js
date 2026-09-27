@@ -1,415 +1,618 @@
-/* ================= RENDER ================= */
-function h(html){ return html; }
-function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+/* ================= EVENTS ================= */
+shell.addEventListener('click', function(ev){
+  warmUp();
+  var el = ev.target.closest('[data-act]');
+  if(!el) return;
+  var a = el.dataset.act, arg = el.dataset.arg;
 
-function render(){
-  var v = '';
-  if(S.screen === 'tour') v = viewTour();
-  else if(!S.data.name && S.screen !== 'account') v = viewWelcome();
-  else if(S.screen === 'home') v = viewHome();
-  else if(S.screen === 'games') v = viewGames();
-  else if(S.screen === 'game') v = viewGame();
-  else if(S.screen === 'learn') v = viewLearn();
-  else if(S.screen === 'tutorial') v = viewTutorial();
-  else if(S.screen === 'ask') v = viewAsk();
-  else if(S.screen === 'me') v = viewMe();
-  else if(S.screen === 'account') v = viewAccount();
-  else if(S.screen === 'tour') v = viewTour();
-  shell.innerHTML = v + (S.modal ? S.modal : '');
-  refreshAiBits();
-  if(S.screen === 'ask') scrollChat();
-  if(S.screen === 'game' && S.game === 'trivia' && !S.g.qs) startTrivia();
-}
-function nav(active){
-  var items = [['home','🏠','navHome'],['games','🎲','navGames'],['learn','📖','navLearn'],['ask','💡','navAsk'],['me','🙂','navMe']];
-  return '<div class="nav">' + items.map(function(i){
-    return '<button class="navbtn" data-act="go" data-arg="'+i[0]+'" data-active="'+(active===i[0])+'">'
-      + '<span class="ic">'+i[1]+'</span>'+esc(t(i[2]))+'</button>';
-  }).join('') + '</div>';
-}
-function head(title, backTo){
-  return '<div class="subheader"><button class="backbtn" data-act="go" data-arg="'+backTo+'" aria-label="'+esc(t('back'))+'">←</button>'
-    + '<h2 class="subtitle">'+esc(title)+'</h2></div>';
-}
+  if(a === 'go'){ stopSpeak(); S.modal=null; S.screen = arg; if(arg!=='game') S.game=null; render(); return; }
+  if(a === 'lang'){ S.data.lang = arg; save(); stopSpeak(); if(S.game==='word'||S.game==='trivia') S.g={}; render(); return; }
+  if(a === 'setname'){
+    var v = (document.getElementById('nameIn')||{}).value || '';
+    S.data.name = v.trim() || t('friend');
+    /* The walkthrough runs once, right after the name. Anyone who has
+       already seen it goes straight home. */
+    if(!S.data.tourDone){ S.tour = 0; S.screen = 'tour'; }
+    save(); render();
+    if(S.screen === 'tour') speakTourCard();
+    return;
+  }
+  if(a === 'savename'){
+    var v2 = (document.getElementById('nameEdit')||{}).value || '';
+    S.data.name = v2.trim() || t('friend'); save(); render(); return;
+  }
+  if(a === 'theme'){ S.data.theme = S.data.theme === 'dark' ? 'light' : 'dark'; save(); applyPrefs(); render(); return; }
+  if(a === 'testvoice'){ setTimeout(updateVoiceUi, 2600); speakOne(S.data.lang==='tl' ? 'Kumusta '+(S.data.name||'kaibigan')+'. Ganito ang bilis ng boses ko.' : 'Hello '+(S.data.name||'friend')+'. This is how fast I will read to you.'); return; }
+  if(a === 'cat'){ S.cat = arg; render(); return; }
+  if(a === 'tut'){ stopSpeak(); S.tutorial = arg; S.screen='tutorial'; render(); return; }
+  if(a === 'markdone'){
+    S.data.done[S.tutorial] = !S.data.done[S.tutorial]; save(); render(); return;
+  }
+  if(a === 'say'){
+    var x = tutById(S.tutorial); speakOne(L(x.steps[Number(arg)])); return;
+  }
+  if(a === 'readall'){
+    var xx = tutById(S.tutorial);
+    var b = document.getElementById('readAllBtn');
+    if(b && b.textContent.indexOf('⏹') === 0){ stopSpeak(); return; }
+    var items = [{t:L(xx.title), s:null}];
+    xx.steps.forEach(function(st, i){ items.push({t:(i+1)+'. '+L(st), s:i}); });
+    items.push({t:t('tipL')+'. '+L(xx.tip), s:null});
+    readAll(items);
+    return;
+  }
+  if(a === 'stopspeak'){ stopSpeak(); return; }
+  if(a === 'authmode'){ authMode = authMode === 'login' ? 'register' : 'login'; authErr = ''; render(); return; }
+  if(a === 'togglepass'){
+    var pf = document.getElementById('auPass');
+    if(pf){ pf.type = pf.type === 'password' ? 'text' : 'password'; el.textContent = pf.type === 'password' ? t('showPass') : t('hidePass'); }
+    return;
+  }
+  if(a === 'signout'){ TandaAPI.signOut(); S.data.account = null; save(); S.screen = 'me'; render(); return; }
+  if(a === 'authgo'){
+    var email = (document.getElementById('auEmail')||{}).value || '';
+    var pass  = (document.getElementById('auPass')||{}).value || '';
+    var nm    = (document.getElementById('auName')||{}).value || S.data.name || '';
+    authErr = '';
+    el.disabled = true;
+    var originalLabel = el.textContent;
+    el.textContent = t('pleaseWait');
 
-/* ---------- welcome ---------- */
-function viewWelcome(){
-  return '<div class="scroll" style="display:flex;flex-direction:column;justify-content:center;padding:32px 26px">'
-    + '<div class="center"><div style="width:78px;height:78px;border-radius:22px;background:var(--teal);color:var(--marigold);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-family:\'Baloo 2\';font-weight:800;font-size:2rem;box-shadow:0 8px 20px var(--tile-shadow)">T</div>'
-    + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.7rem;margin:0 0 6px">'+esc(t('welcome'))+'</h1>'
-    + '<p class="muted" style="margin:0 0 22px">'+esc(t('welcomeS'))+'</p></div>'
-    + '<label class="f">'+esc(t('langQ'))+'</label>'
-    + '<div class="langswitch" style="margin-bottom:16px">'
-      + '<button class="langopt" style="flex:1" data-act="lang" data-arg="en" data-active="'+(S.data.lang==='en')+'">English</button>'
-      + '<button class="langopt" style="flex:1" data-act="lang" data-arg="tl" data-active="'+(S.data.lang==='tl')+'">Tagalog</button>'
-    + '</div>'
-    + '<label class="f">'+esc(t('nameQ'))+'</label>'
-    + '<input class="t" id="nameIn" placeholder="Lola Rosa" autocomplete="name">'
-    + '<button class="btn" style="margin-top:16px" data-act="setname">'+esc(t('start'))+'</button>'
-    + '</div>';
-}
+    // The free server can be asleep and take up to ~60s to wake on the
+    // first request. Without this, that wait looks exactly like a dead
+    // button. Give it real time, but not forever.
+    var timedOut = false;
+    var timeoutId = setTimeout(function(){
+      timedOut = true;
+      authErr = t('stillWaiting');
+      el.disabled = false;
+      el.textContent = originalLabel;
+      render();
+    }, 75000);
 
-/* ---------- home ---------- */
-function viewHome(){
-  var d = new Date();
-  var dateStr = d.toLocaleDateString(S.data.lang==='tl'?'fil-PH':'en-US', {weekday:'long', month:'long', day:'numeric'});
-  var tiles = [
-    ['games','🎲','var(--marigold)', t('games'), t('gamesSub')],
-    ['learn','📖','var(--teal)', t('learnT'), t('learnSub')],
-    ['ask','💡','var(--terracotta)', t('askT'), t('askSub')],
-    ['me','🙂','var(--leaf)', t('meT'), t('textSize')+' · '+t('lang')]
-  ];
-  return '<div class="scroll">'
-    + '<div class="header"><div><p class="greet-label">'+esc(t('hi'))+'</p>'
-    + '<h1 class="greet-name">'+esc(S.data.name || t('friend'))+'</h1>'
-    + '<p class="greet-date">'+esc(dateStr)+'</p></div>'
-    + '<button class="avatar" data-act="go" data-arg="me">'+esc((S.data.name||'T').slice(0,1).toUpperCase())+'</button></div>'
-    + '<div class="streak"><div class="streak-icon">🔥</div><div><h3>'+esc(t('streakT',{n:S.data.streak}))+'</h3><p>'+esc(t('streakS'))+'</p></div></div>'
-    + '<div class="sec-label">'+esc(t('today'))+'</div>'
-    + '<div class="grid">'
-    + tiles.map(function(x){
-        return '<button class="tile" data-act="go" data-arg="'+x[0]+'">'
-          + '<span class="tile-icon" style="background:'+x[2]+'">'+x[1]+'</span>'
-          + '<h4>'+esc(x[3])+'</h4><p>'+esc(x[4])+'</p></button>';
-      }).join('')
-    + '<button class="tile wide" data-act="go" data-arg="learn">'
-      + '<span class="tile-icon" style="background:var(--teal-soft)">📈</span>'
-      + '<div><h4>'+esc(t('progress',{a:doneCount(), b:TUT.length}))+'</h4><p>'+esc(t('voiceNote'))+'</p></div></button>'
-    + '</div><div style="height:22px"></div></div>' + nav('home');
-}
-
-/* ---------- games ---------- */
-var GAMES = [
-  {id:'match', icon:'🀄', tk:'matchT', sk:'matchS'},
-  {id:'puzzle', icon:'🔢', tk:'puzT', sk:'puzS'},
-  {id:'word', icon:'🔤', tk:'wordT', sk:'wordS'},
-  {id:'math', icon:'➕', tk:'mathT', sk:'mathS'},
-  {id:'blocks', icon:'🧱', tk:'blocksT', sk:'blocksS'}
-];
-function viewGames(){
-  return '<div class="scroll">' + head(t('games'),'home')
-    + '<div class="list">'
-    + GAMES.map(function(g){
-        return '<button class="listitem" data-act="game" data-arg="'+g.id+'"'+(g.ai?' data-ai-gate="1"':'')+'>'
-          + '<span class="dot">'+g.icon+'</span><div><h4>'+esc(t(g.tk))+'</h4><p>'+esc(t(g.sk))+'</p></div>'
-          + '<span class="chev">›</span></button>';
-      }).join('')
-    + '</div></div>' + nav('games');
-}
-
-/* ---------- learn ---------- */
-function viewLearn(){
-  var list = tutsIn(S.cat);
-  return '<div class="scroll">' + head(t('learnT'),'home')
-    + '<div class="tabs">' + CATS.map(function(c){
-        return '<button class="tab" data-act="cat" data-arg="'+c.id+'" data-active="'+(S.cat===c.id)+'">'+c.icon+' '+esc(t(c.label))+'</button>';
-      }).join('') + '</div>'
-    + '<div class="list">' + list.map(function(x){
-        var done = !!S.data.done[x.id];
-        return '<button class="listitem" data-act="tut" data-arg="'+x.id+'">'
-          + '<span class="dot">'+x.icon+'</span>'
-          + '<div style="flex:1"><h4>'+esc(L(x.title))+' '+(done?'<span class="done-badge">✓ '+esc(t('doneY'))+'</span>':'')+'</h4>'
-          + '<p>'+esc(L(x.sub))+' · '+x.steps.length+' '+esc(t('steps'))+'</p></div>'
-          + '<span class="chev">›</span></button>';
-      }).join('') + '</div>'
-    + '<div class="pad" style="padding-top:0">'
-      + '<button class="card" style="width:100%;text-align:left;border:none;cursor:pointer" data-act="go" data-arg="ask">'
-        + '<p style="margin:0 0 4px;font-weight:700">' + esc(t('notHereT')) + '</p>'
-        + '<p class="muted" style="margin:0;font-size:.88rem">' + esc(t('notHereS')) + '</p>'
-      + '</button></div>'
-    + '</div>' + nav('learn');
-}
-
-/* ---------- tutorial ---------- */
-function viewTutorial(){
-  var x = tutById(S.tutorial);
-  if(!x) return viewLearn();
-  var done = !!S.data.done[x.id];
-  /* Each step can carry a picture of the real screen. The file is looked up
-     by name - img/<tutorial id>-<step number>.jpg - so adding a screenshot
-     means dropping the file in, with no data file to edit. If the file is
-     not there yet, onerror hides it and the step reads as plain text,
-     exactly as before. */
-  var stepsHtml = x.steps.map(function(s, i){
-    var txt = L(s);
-    var shot = 'img/' + x.id + '-' + (i+1) + '.jpg';
-    return '<div class="step" data-step="'+i+'"><span class="step-num">'+(i+1)+'</span>'
-      + '<div style="flex:1;min-width:0">'
-        + '<p style="margin:0">'+esc(txt)+'</p>'
-        + '<img class="stepshot" src="'+esc(shot)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
-      + '</div>'
-      + '<button class="say" data-act="say" data-arg="'+i+'" aria-label="'+esc(t('readStep'))+'">\uD83D\uDD0A</button></div>';
-  }).join('');
-  return '<div class="scroll">' + head(x.icon + '  ' + L(x.title), 'learn')
-    + '<div class="pad">'
-    + (x.warn ? '<div class="warn">'+esc(L(x.sub))+'</div><div style="height:12px"></div>' : '')
-    + '<div id="voiceStatus">'+voiceStatusHtml()+'</div>'
-    + '<div class="card">' + stepsHtml + '</div>'
-    + '<div class="tip"><strong>'+esc(t('tipL'))+':</strong> ' + esc(L(x.tip)) + '</div>'
-    + '<div style="height:14px"></div>'
-    + '<div id="aiOut"></div>'
-    + '<div class="row" data-ai-gate="1">'
-      + '<button class="btn ghost" data-act="simpler">✨ '+esc(t('simpler'))+'</button>'
-      + '<button class="btn ghost" data-act="askabout">💡 '+esc(t('askAbout'))+'</button>'
-    + '</div>'
-    + '<div style="height:14px"></div>'
-    + '<button class="btn '+(done?'ghost':'alt')+'" data-act="markdone">'+(done?'✓ '+esc(t('doneY')):esc(t('done')))+'</button>'
-    + '<div style="height:8px"></div>'
-    + '</div>'
-    + '<div class="pad" style="padding-top:0"><div class="voicebar">'
-      + '<button class="btn" id="readAllBtn" data-act="readall">🔊 '+esc(t('listen'))+'</button>'
-      + '<button class="btn ghost" style="flex:0 0 auto;width:auto;padding:14px 18px" data-act="stopspeak">⏹</button>'
-      + '<button class="btn ghost" style="flex:0 0 auto;width:auto;padding:14px 16px" data-act="bigread" title="'+esc(t('bigRead'))+'">🔎</button>'
-    + '</div></div>'
-    + '</div>';
-}
-
-/* ---------- ask (AI chat) ---------- */
-var chat = [];
-var askedByVoice = false;
-function viewAsk(){
-  var bubbles = chat.map(function(m, i){
-    if(m.role === 'me') return '<div class="bub me">'+esc(m.text)+'</div>';
-    var g = m.guide;
-    return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)
-      + (m.pending ? '' : '<br><button class="say" data-act="sayai" data-arg="'+i+'">\uD83D\uDD0A </button>')
-      + (m.askPerm && !m.pending
-          ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
-            + 'data-act="grantbright">' + esc(t('grantBright')) + '</button></div>'
-          : '')
-      + (g && !m.pending
-          ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'
-            + '<p class="muted" style="margin:0 0 6px;font-size:.82rem">'+esc(t('guideFound'))+'</p>'
-            + '<button class="btn small" style="width:auto;padding:10px 14px" data-act="tut" data-arg="'+esc(g.id)+'">'
-              + g.icon + '  ' + esc(L(g.title)) + '</button>'
-            + openAppBtn(g)
-            + '</div>'
-          : '')
-      + '</div>';
-  }).join('');
-  var intro = chat.length ? '' : '<div class="bub ai">'+esc(t('helperIntro'))+'</div>';
-  return '<div class="shellcol" style="display:flex;flex-direction:column;flex:1;min-height:0">'
-    + head(t('helper'),'home')
-    + '<div class="chat" id="chatBox">' + intro + bubbles
-    + '<div data-ai-off class="card hidden" style="margin:12px 0"><p class="muted" style="margin:0">'+esc(t('aiOff'))+'</p></div>'
-    + '</div>'
-    + '<div class="chips">'
-      + '<button class="chip" data-act="chip" data-arg="1">'+esc(t('suggest1'))+'</button>'
-      + '<button class="chip" data-act="chip" data-arg="2">'+esc(t('suggest2'))+'</button>'
-      + '<button class="chip" data-act="chip" data-arg="3">'+esc(t('suggest3'))+'</button>'
-    + '</div>'
-    + '<div class="composer"><textarea id="askIn" rows="1" placeholder="'+esc(t('typeHere'))+'"></textarea>'
-    + (sttSupported() ? '<button class="send ghost" id="askMicBtn" data-act="mic" aria-label="'+esc(t('voiceInput'))+'">🎤</button>' : '')
-    + '<button class="send" data-act="send" aria-label="'+esc(t('send'))+'">➤</button></div>'
-    + '</div>' + nav('ask');
-}
-function scrollChat(){ var c = document.getElementById('chatBox'); if(c) c.scrollTop = c.scrollHeight; }
-
-function sendAsk(text){
-  if(!text || !text.trim()) return;
-  if(!aiReady()) return;
-  chat.push({role:'me', text:text.trim()});
-  chat.push({role:'ai', text:t('thinking'), pending:true});
-  render();
-  var turns = [{role:'user', content:aiRules()}];
-  var hist = chat.filter(function(m){ return !m.pending; }).slice(-8);
-  hist.forEach(function(m){ turns.push({role: m.role==='me'?'user':'assistant', content:m.text}); });
-  var idx = chat.length - 1;
-  aiAsk(turns, {
-    cache:false, modelTier:'quick',
-    onText:function(u){
-      /* The tag arrives character by character at the very end. Trimming a
-         partial one keeps "[GUID" from flashing on screen mid-answer. */
-      var live = String(u.text).replace(/\[GUIDE:?[a-z0-9\-]*\]?\s*$/i, '');
-      chat[idx].text = live; chat[idx].pending = true;
-      var b = document.getElementById('bub'+idx);
-      if(b){ b.textContent = live; scrollChat(); }
+    var p = authMode === 'register' ? TandaAPI.register(nm, email, pass) : TandaAPI.login(email, pass);
+    p.then(function(res){
+      if(timedOut) return;   // the timeout already redrew the screen; don't fight it
+      clearTimeout(timeoutId);
+      S.data.account = res.user;
+      if(res.user.name && !S.data.name) S.data.name = res.user.name;
+      if(res.progress) TandaAPI.mergeInto(S.data, res.progress);
+      save();
+      S.screen = S.data.name ? 'me' : 'home';
+      render();
+    }).catch(function(e){
+      if(timedOut) return;
+      clearTimeout(timeoutId);
+      authErr = t(e && e.msgKey ? e.msgKey : 'serverBad', {base: TandaAPI.base}) + '\n[' + TandaAPI.base + ']';
+      render();
+    });
+    return;
+  }
+  if(a === 'grantbright'){
+    var TSg = tandaSys();
+    if(TSg && TSg.requestWriteSettings) TSg.requestWriteSettings().catch(function(){});
+    return;
+  }
+  if(a === 'tournext'){
+    stopSpeak();
+    S.tour = (S.tour || 0) + 1;
+    if(S.tour >= TOUR.length){
+      S.data.tourDone = true; save();
+      S.screen = 'home'; S.tour = 0; render(); return;
     }
-  }).then(function(r){
-    var parted = splitGuideTag(r.text);
-    chat[idx] = {role:'ai', text:parted.text, guide:parted.guide};
-    render();
-    /* A question that was spoken gets an answer that is spoken. Someone who
-       used the microphone did so because reading is the hard part, and
-       handing them back a wall of text would undo that. The stop bar shows
-       itself while this runs. */
-    if(askedByVoice){ askedByVoice = false; try{ speakOne(parted.text); }catch(e){} }
-  }).catch(function(e){
-    // Temporary: show the real reason instead of only the generic message,
-    // so a stuck "Something went wrong" can actually be diagnosed on-device.
-    var detail = '';
-    try{ detail = '\n\n[debug: ' + (e && (e.code || e.message || JSON.stringify(e))) + ']'; }catch(_){ detail = '\n\n[debug: unknown error shape]'; }
-    chat[idx] = {role:'ai', text: (e && e.text ? e.text : t('aiErr')) + detail};
-    render();
-  });
-}
+    render(); speakTourCard(); return;
+  }
+  if(a === 'tourprev'){
+    stopSpeak();
+    S.tour = Math.max(0, (S.tour || 0) - 1);
+    render(); speakTourCard(); return;
+  }
+  if(a === 'toursay'){ stopSpeak(); speakTourCard(true); return; }
+  if(a === 'tourskip'){
+    stopSpeak();
+    S.data.tourDone = true; save();
+    S.screen = 'home'; S.tour = 0; render(); return;
+  }
+  if(a === 'tourstart'){
+    stopSpeak();
+    S.tour = 0; S.screen = 'tour'; render(); speakTourCard(); return;
+  }
+  if(a === 'voicecheck'){ warmUp(); runVoiceCheck(); return; }
+  if(a === 'bigread'){ S.bigStep = 0; bigReader(); return; }
+  if(a === 'bignext'){
+    var bx = tutById(S.tutorial);
+    if(S.bigStep >= bx.steps.length - 1){ S.modal = null; render(); return; }
+    S.bigStep++; bigReader(); return;
+  }
+  if(a === 'bigprev'){ if(S.bigStep > 0){ S.bigStep--; bigReader(); } return; }
+  if(a === 'bigsay'){ var bx2 = tutById(S.tutorial); speakOne(L(bx2.steps[S.bigStep])); return; }
+  if(a === 'bigclose'){ S.modal = null; stopSpeak(); render(); return; }
+  if(a === 'sayblob'){ var o = document.getElementById('aiOut'); if(o && o.dataset.text) speakOne(o.dataset.text); return; }
+  if(a === 'sayai'){ var m = chat[Number(arg)]; if(m) speakOne(m.text); return; }
+  if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
+  if(a === 'simpler'){ tutorialAi('simpler'); return; }
+  if(a === 'askabout'){ tutorialAi('questions'); return; }
+  if(a === 'mic'){
+    if(!sttSupported()) return;
+    var micBtn = el;
+    if(isListening()){ stopListening(); return; }
+    var ta = document.getElementById('askIn');
+    var basePrefix = ta && ta.value ? ta.value + ' ' : '';
+    micBtn.textContent = '\u23FA\uFE0F';
 
-/* in-tutorial AI */
-function tutorialAi(mode){
-  var x = tutById(S.tutorial);
-  if(!x || !aiReady()) return;
-  var out = document.getElementById('aiOut');
-  out.innerHTML = '<div class="card"><span class="thinking"><span class="dot-anim"></span><span class="dot-anim"></span><span class="dot-anim"></span> '+esc(t('thinking'))+'</span></div>';
-  var body = L(x.title) + '\n' + x.steps.map(function(s,i){ return (i+1)+'. '+L(s); }).join('\n');
-  var q = mode === 'simpler'
-    ? 'A senior citizen read this guide and wants it explained again in an even simpler way, in their own words, with a small everyday example. Do not repeat the numbered steps word for word. Guide:\n\n' + body
-    : 'A senior citizen is reading this guide. Write the three questions they most likely still have, and answer each one in one or two short sentences. Guide:\n\n' + body;
-  aiAsk(q, {
-    modelTier:'default',
-    cache:{gcTime:86400000},
-    onText:function(u){
-      out.innerHTML = '<div class="card"><p style="margin:0 0 8px;white-space:pre-wrap;line-height:1.6">'+esc(u.text)+'</p></div>';
+    // Short phrases sometimes get echoed twice by Android's own speech
+    // engine before it settles ("check" -> "check check") - a quirk of the
+    // recognizer, not of this app. Collapse an exact A-A repeat.
+    function dedupeRepeat(text){
+      var words = String(text).trim().split(/\s+/);
+      var n = words.length;
+      if(n >= 2 && n % 2 === 0){
+        var half = n / 2;
+        var a1 = words.slice(0, half).join(' ').toLowerCase();
+        var a2 = words.slice(half).join(' ').toLowerCase();
+        if(a1 === a2) return words.slice(0, half).join(' ');
+      }
+      return text;
     }
-  }).then(function(r){
-    out.innerHTML = '<div class="card"><p style="margin:0 0 10px;white-space:pre-wrap;line-height:1.6">'+esc(r.text)+'</p>'
-      + '<button class="btn small alt" data-act="sayblob">🔊 '+esc(t('listen'))+'</button></div>';
-    out.dataset.text = r.text;
-  }).catch(function(e){
-    out.innerHTML = '<div class="card"><p class="muted" style="margin:0">'+esc(e && e.code==='not_granted' ? t('aiOff') : t('aiErr'))+'</p></div>';
-  });
-}
 
-/* ---------- me / settings ---------- */
-function viewMe(){
-  var dark = S.data.theme === 'dark';
-  return '<div class="scroll">' + head(t('meT'),'home')
-    + '<div class="pad">'
-    + '<label class="f">'+esc(t('yourName'))+'</label>'
-    + '<input class="t" id="nameEdit" value="'+esc(S.data.name)+'">'
-    + '<button class="btn small" style="margin:10px 0 20px" data-act="savename">'+esc(t('save'))+'</button>'
-    + '<label class="f">'+esc(t('lang'))+'</label>'
-    + '<div class="langswitch" style="margin-bottom:18px">'
-      + '<button class="langopt" style="flex:1" data-act="lang" data-arg="en" data-active="'+(S.data.lang==='en')+'">English</button>'
-      + '<button class="langopt" style="flex:1" data-act="lang" data-arg="tl" data-active="'+(S.data.lang==='tl')+'">Tagalog</button>'
-    + '</div>'
-    + '<div class="slider-row"><span class="l" style="font-weight:700">'+esc(t('textSize'))+'</span>'
-      + '<input type="range" min="0.9" max="1.5" step="0.05" value="'+S.data.scale+'" data-act="scale"></div>'
-    + '<div class="slider-row"><span class="l" style="font-weight:700">'+esc(t('voiceSpeed'))+'</span>'
-      + '<input type="range" min="0.6" max="1.1" step="0.05" value="'+S.data.rate+'" data-act="rate">'
+    startListening(function(liveText){
+      var said = dedupeRepeat(liveText);
+
+      /* Spoken commands are handled here rather than sent to the AI. Asking
+         the model to open Messenger would cost a round trip and a wait, and
+         it would still only be able to answer in words. A command that the
+         phone can simply carry out should be carried out. */
+      if(runVoiceCommand(said)) return;
+
+      var box = document.getElementById('askIn') || ta;
+      if(box){
+        box.value = basePrefix + said;
+        try{ box.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
+      }
+      /* Anything that is not a command is a question, so send it without
+         making the person find the arrow afterwards. */
+      if(box){ var q = box.value; box.value = ''; askedByVoice = true; sendAsk(q); }
+    }, function(){
+      var mb = document.querySelector('[data-act="mic"]') || micBtn;
+      if(mb) mb.textContent = '\uD83C\uDFA4';
+    });
+    return;
+  }
+
+  if(a === 'send'){ var ta = document.getElementById('askIn'); var txt = ta ? ta.value : ''; if(ta) ta.value=''; sendAsk(txt); return; }
+  if(a === 'chip'){ sendAsk(t('suggest'+arg)); return; }
+
+  if(a === 'game'){ S.game = arg; S.g = {}; S.screen='game'; S.modal=null;
+    if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath(); if(arg==='blocks') initBlocks();
+    render(); if(arg==='trivia') startTrivia(); return; }
+  if(a === 'usefallback'){
+    var flb = (FALLBACK_Q[S.data.lang] || FALLBACK_Q.en);
+    S.g = {qs: flb, i:0, score:0, picked:null};
+    render();
+    return;
+  }
+  if(a === 'replay'){ S.modal=null;
+    if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord(); else if(S.game==='blocks') initBlocks();
+    else if(S.game==='math') initMath(); else if(S.game==='trivia'){ startTrivia(); return; }
+    render(); return; }
+  if(a === 'bleft'){ blockMove(-1); return; }
+  if(a === 'bright'){ blockMove(1); return; }
+  if(a === 'brot'){ blockRotate(); return; }
+  if(a === 'bdown'){ blockSlam(); return; }
+  if(a === 'flip'){ flip(Number(arg)); return; }
+  if(a === 'slide'){ slide(Number(arg)); return; }
+  if(a === 'pick'){
+    var p = S.g.pool[Number(arg)];
+    if(!p || p.used) return;
+    if(S.g.answer.length >= S.g.word.length) return;
+    p.used = true; S.g.answer.push(p); S.g.wrong=false; render(); return;
+  }
+  if(a === 'unpick'){
+    var idx = Number(arg); var it = S.g.answer[idx];
+    if(!it) return; it.used = false; S.g.answer.splice(idx,1); S.g.wrong=false; render(); return;
+  }
+  if(a === 'clearword'){ S.g.answer.forEach(function(p){p.used=false;}); S.g.answer=[]; S.g.wrong=false; render(); return; }
+  if(a === 'checkword'){
+    var guess = S.g.answer.map(function(p){return p.c;}).join('');
+    if(guess === S.g.word){ winModal(S.g.word + ' ✓'); }
+    else { S.g.wrong = true; soundWrong(); render(); }
+    return;
+  }
+  if(a === 'math'){
+    if(S.g.over || S.g.q.picked !== null) return;
+    S.g.q.picked = Number(arg);
+    if(Number(arg) === S.g.q.ans){
+      S.g.score++; S.g.streak++;
+      soundRight();
+      /* Every few right answers the numbers get bigger. The level-up tone
+         is what tells the player it got harder, so a sudden difficult sum
+         does not feel like the app misbehaving. */
+      if(S.g.streak >= MATH_LEVEL_EVERY){ S.g.streak = 0; S.g.level++; soundLevel(); }
+    }else{
+      S.g.lives--;
+      soundWrong();
+    }
+    render(); return;
+  }
+  if(a === 'nextmath'){
+    S.g.n++;
+    if(S.g.lives <= 0){ mathOver(); return; }
+    nextMath(); render(); return;
+  }
+  if(a === 'triv'){
+    if(S.g.picked !== null) return;
+    S.g.picked = Number(arg);
+    if(Number(arg) === Number(S.g.qs[S.g.i].a)){ S.g.score++; soundRight(); } else { soundWrong(); }
+    render(); return;
+  }
+  if(a === 'nexttriv'){
+    S.g.i++; S.g.picked = null;
+    // The quiz has its own end screen instead of the shared winModal, so
+    // recording the finished round happens right here — once, guarded by
+    // a flag, the moment the last question is passed.
+    if(S.g.i >= S.g.qs.length && !S.g.recorded){
+      S.g.recorded = true;
+      S.data.plays = (S.data.plays||0)+1; save();
+      if(window.TandaAPI) TandaAPI.recordGame('trivia', S.g.score, {total: S.g.qs.length});
+    }
+    render(); return;
+  }
+});
+shell.addEventListener('input', function(ev){
+  var el = ev.target.closest('[data-act]');
+  if(!el) return;
+  if(el.dataset.act === 'scale'){ S.data.scale = Number(el.value); save(); applyPrefs(); return; }
+  if(el.dataset.act === 'rate'){ S.data.rate = Number(el.value); save(); return; }
+});
+shell.addEventListener('keydown', function(ev){
+  if(ev.target.id === 'askIn' && ev.key === 'Enter' && !ev.shiftKey){
+    ev.preventDefault();
+    var ta = ev.target; var txt = ta.value; ta.value=''; sendAsk(txt);
+  }
+  if(ev.target.id === 'nameIn' && ev.key === 'Enter'){
+    ev.preventDefault();
+    S.data.name = (ev.target.value||'').trim() || t('friend'); save(); render();
+  }
+});
+window.addEventListener('beforeunload', function(){ try{ window.speechSynthesis.cancel(); }catch(e){} });
+
+/* ---------- account screen ---------- */
+var authMode = 'login';   /* or 'register' */
+var authErr = '';
+function viewAccount(){
+  var a = S.data.account;
+  if(a){
+    return '<div class="scroll">' + head(t('accountT'), 'me')
+      + '<div class="pad"><div class="card">'
+      + '<p class="muted" style="margin:0 0 4px">' + esc(t('signedInAs')) + '</p>'
+      + '<h4 style="font-family:\'Baloo 2\';margin:0 0 10px;font-size:1.1rem">' + esc(a.email) + '</h4>'
+      + '<p class="muted" style="margin:0">' + esc(t('syncOn')) + '</p>'
+      + (TandaAPI.lastSync() ? '<p class="muted" style="margin:6px 0 0">' + esc(t('lastSync')) + ': ' + esc(TandaAPI.lastSync()) + '</p>' : '')
       + '</div>'
-    + '<div id="voiceStatus">'+voiceStatusHtml()+'</div>'
-    + '<button class="toggle-row" data-act="theme"><span><span class="l">'+esc(t('dark'))+'</span><br><span class="muted">'+esc(t('darkS'))+'</span></span>'
-      + '<span class="track '+(dark?'on':'')+'"><span class="thumb"></span></span></button>'
-    + '<button class="listitem" style="margin-bottom:14px" data-act="go" data-arg="account">'
-      + '<span class="dot">'+(S.data.account?'✅':'👤')+'</span>'
-      + '<div><h4>'+esc(S.data.account ? S.data.account.email : t('signIn'))+'</h4>'
-      + '<p>'+esc(S.data.account ? t('syncOn') : t('syncOff'))+'</p></div><span class="chev">›</span></button>'
-    + (S.data.account && S.data.account.role === 'admin'
-        ? '<a class="listitem" href="admin.html" style="text-decoration:none;margin-bottom:14px">'
-          + '<span class="dot">🛠️</span><div><h4>'+esc(t('adminT'))+'</h4><p>'+esc(t('adminS'))+'</p></div>'
-          + '<span class="chev">›</span></a>'
-        : '')
-    + '<button class="listitem" style="margin-bottom:14px" data-act="tourstart">'
-      + '<span class="dot">\uD83D\uDC4B</span>'
-      + '<div><h4>'+esc(t('tourAgain'))+'</h4><p>'+esc(t('tourAgainS'))+'</p></div>'
-      + '<span class="chev">\u203A</span></button>'
-    + badgeShelfHtml()
-    + '<div class="card" style="margin-top:16px"><h4 style="font-family:\'Baloo 2\';margin:0 0 6px">'+esc(t('progress',{a:doneCount(), b:TUT.length}))+'</h4>'
-      + '<p class="muted" style="margin:0">🔥 '+esc(t('streakT',{n:S.data.streak}))+'</p></div>'
+      + '<button class="btn ghost" data-act="signout">' + esc(t('signOut')) + '</button></div></div>' + nav('me');
+  }
+  var reg = authMode === 'register';
+  return '<div class="scroll">' + head(reg ? t('createAcc') : t('signIn'), S.data.name ? 'me' : 'home')
+    + '<div class="pad">'
+    + (reg ? '<label class="f">' + esc(t('yourName')) + '</label><input class="t" id="auName" style="margin-bottom:12px">' : '')
+    + '<label class="f">' + esc(t('email')) + '</label>'
+    + '<input class="t" id="auEmail" type="email" autocomplete="email" inputmode="email" autocapitalize="none" autocorrect="off" spellcheck="false" style="margin-bottom:12px">'
+    + '<label class="f">' + esc(t('password')) + '</label>'
+    + '<div style="position:relative;margin-bottom:2px">'
+    + '<input class="t" id="auPass" type="password" autocomplete="' + (reg ? 'new-password' : 'current-password') + '" autocapitalize="none" autocorrect="off" spellcheck="false" style="padding-right:52px">'
+    + '<button type="button" data-act="togglepass" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;padding:10px;cursor:pointer;color:var(--ink-soft)">' + esc(t('showPass')) + '</button>'
+    + '</div>'
+    + (authErr ? '<p style="color:var(--terracotta);font-weight:700;margin:12px 0 0">' + esc(authErr) + '</p>' : '')
+    + '<button class="btn" style="margin-top:16px" data-act="authgo">' + esc(reg ? t('createAcc') : t('signIn')) + '</button>'
+    + '<p class="center" style="margin-top:14px"><button class="btn small ghost" data-act="authmode">'
+      + esc(reg ? t('haveAcc') : t('createAcc')) + '</button></p>'
+    + '<p class="center" style="margin-top:6px"><button class="btn small ghost" data-act="go" data-arg="' + (S.data.name ? 'me' : 'home') + '">'
+      + esc(t('offlineOk')) + '</button></p>'
     + '</div></div>' + nav('me');
 }
 
-/* ---------- badge shelf ----------
-   Every badge is drawn, earned or not. Seeing the empty ones is what makes
-   the earned ones mean anything, and it shows there is more to come. */
-function badgeShelfHtml(){
-  S.data.badges = S.data.badges || {};
-  var won = 0;
-  var cells = BADGES.map(function(b){
-    var have = !!S.data.badges[b.id];
-    if(have) won++;
-    return '<div style="text-align:center;width:72px;margin:6px 4px">'
-      + '<div style="font-size:1.9rem;line-height:1.1;opacity:' + (have ? '1' : '.22') + '">' + b.icon + '</div>'
-      + '<p class="muted" style="margin:2px 0 0;font-size:.68rem;line-height:1.25">' + esc(t('badge_'+b.id)) + '</p>'
-      + '</div>';
-  }).join('');
-  return '<div class="card" style="margin-top:16px">'
-    + '<h4 style="font-family:\'Baloo 2\';margin:0 0 2px">' + esc(t('badgesT')) + ' (' + won + '/' + BADGES.length + ')</h4>'
-    + '<p class="muted" style="margin:0 0 8px;font-size:.82rem">' + esc(t('badgesS')) + '</p>'
-    + '<div style="display:flex;flex-wrap:wrap;justify-content:center">' + cells + '</div>'
-    + '</div>';
-}
-
-/* ---------- first-run walkthrough ----------
-   Shown once, right after the name is entered. It answers the problem the
-   app itself creates: someone who does not know how to use a phone has to
-   learn this app before it can teach them anything. One idea per screen,
-   large type, and every card is read out loud without being asked, since
-   the whole point is that reading may be the hard part. */
-var TOUR = [
-  {icon:'\uD83D\uDC4B', t:'tour1T', b:'tour1B'},
-  {icon:'\uD83D\uDC47', t:'tour2T', b:'tour2B'},
-  {icon:'\uD83D\uDD0A', t:'tour3T', b:'tour3B'},
-  {icon:'\uD83D\uDD0E', t:'tour4T', b:'tour4B'},
-  {icon:'\uD83D\uDCA1', t:'tour5T', b:'tour5B'},
-  {icon:'\u2705', t:'tour6T', b:'tour6B'}
-];
-function viewTour(){
-  var i = S.tour || 0;
-  if(i >= TOUR.length) i = TOUR.length - 1;
-  var c = TOUR[i];
-  var last = i === TOUR.length - 1;
-  var title = t(c.t, {n: S.data.name || t('friend')});
-  var body  = t(c.b);
-
-  var dots = TOUR.map(function(_, k){
-    return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px;'
-      + 'background:' + (k === i ? 'var(--teal)' : 'var(--line)') + '"></span>';
-  }).join('');
-
-  return '<div class="scroll" style="display:flex;flex-direction:column;padding:26px 24px">'
-    + '<div style="text-align:right;min-height:34px">'
-      + (last ? '' : '<button class="btn small ghost" style="width:auto;padding:8px 14px" data-act="tourskip">'
-          + esc(t('tourSkip')) + '</button>')
-    + '</div>'
-    + '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center">'
-      + '<div style="font-size:4rem;line-height:1.1;margin-bottom:14px">' + c.icon + '</div>'
-      + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.55rem;margin:0 0 12px">' + esc(title) + '</h1>'
-      + '<p style="font-size:1.12rem;line-height:1.65;margin:0 auto;max-width:420px">' + esc(body) + '</p>'
-      + '<div style="height:18px"></div>'
-      + '<button class="btn small ghost" id="tourSayBtn" style="width:auto;padding:10px 16px;margin:0 auto" data-act="toursay">'
-        + '\uD83D\uDD0A ' + esc(t('listen')) + '</button>'
-    + '</div>'
-    + '<div style="text-align:center;margin:18px 0 10px">' + dots + '</div>'
-    + '<button class="btn" data-act="tournext">' + esc(last ? t('tourDone') : t('tourNext')) + '</button>'
-    + (i > 0 ? '<div style="height:9px"></div><button class="btn ghost" data-act="tourprev">'
-        + esc(t('tourBack')) + '</button>' : '')
-    + '<div style="height:10px"></div>'
-    + '</div>';
-}
-/* Reading the card aloud is done here rather than inside viewTour, because
-   render() runs for every small change and would otherwise start the voice
-   over and over on the same card. */
-var tourSpoken = -1;
-function speakTourCard(force){
-  var i = S.tour || 0;
-  if(!force && tourSpoken === i) return;
-  tourSpoken = i;
-  var c = TOUR[i]; if(!c) return;
+/* ---------- voice diagnostic ---------- */
+function runVoiceCheck(){
+  var out = document.getElementById('vcOut');
+  if(!out) return;
+  loadVoices();
+  var info = [];
+  info.push('speechSynthesis present: ' + (ttsSupported() ? 'yes' : 'NO'));
+  info.push('voices found: ' + VOICES.length);
+  info.push('voice names: ' + (VOICES.slice(0,4).map(function(v){ return v.name + ' [' + v.lang + ']'; }).join(' | ') || 'none'));
+  info.push('running inside a frame: ' + (window.top !== window.self ? 'yes' : 'no'));
+  info.push('page address: ' + location.origin);
+  var events = [];
+  function show(){
+    out.innerHTML = '<div class="card"><p style="margin:0;font-size:.8rem;line-height:1.7;word-break:break-word">'
+      + esc(info.join('\n') + '\nevents: ' + (events.join(', ') || 'waiting…')).replace(/\n/g,'<br>')
+      + '</p></div>';
+  }
+  show();
+  if(!ttsSupported()) return;
+  var phrase = S.data.lang === 'tl' ? 'Isa, dalawa, tatlo. Naririnig mo ba ako?' : 'One, two, three. Can you hear me?';
   try{
-    warmUp();
-    speakList([t(c.t, {n: S.data.name || t('friend')}), t(c.b)]);
+    var u = new SpeechSynthesisUtterance(phrase);
+    var v = pickVoice();
+    if(v){ u.voice = v; u.lang = v.lang; }
+    u.rate = Number(S.data.rate) || .85;
+    u.onstart = function(){ events.push('start'); show(); };
+    u.onend   = function(){ events.push('end'); show(); };
+    u.onerror = function(e){ events.push('error:' + ((e && e.error) || '?')); show(); };
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+    setTimeout(function(){
+      if(!events.length){ events.push('no events after 3s — the utterance was dropped silently'); show(); }
+    }, 3000);
+  }catch(err){ events.push('threw: ' + (err && err.message)); show(); }
+}
+
+/* ---------- big text reader (works with no voice at all) ---------- */
+function bigReader(){
+  var x = tutById(S.tutorial);
+  if(!x) return;
+  var i = S.bigStep || 0;
+  var total = x.steps.length;
+  S.modal = '<div class="backdrop"><div class="modal" style="max-width:400px;text-align:left">'
+    + '<p class="muted" style="margin:0 0 6px">' + (i+1) + ' / ' + total + '</p>'
+    + '<p style="font-size:1.5rem;line-height:1.5;margin:0 0 20px;font-weight:700">' + esc(L(x.steps[i])) + '</p>'
+    + '<div class="row">'
+      + '<button class="btn ghost" data-act="bigprev"' + (i===0?' disabled':'') + '>' + esc(t('prev')) + '</button>'
+      + '<button class="btn" data-act="bignext">' + (i===total-1 ? esc(t('close')) : esc(t('next'))) + '</button>'
+    + '</div>'
+    + '<div style="height:9px"></div>'
+    + '<button class="btn small ghost" data-act="bigsay">\uD83D\uDD0A</button> '
+    + '<button class="btn small ghost" data-act="bigclose">' + esc(t('close')) + '</button>'
+    + '</div></div>';
+  render();
+}
+
+      
+
+/* ---------- spoken commands ----------
+   A short list of things the phone can just do, checked before anything is
+   sent to the AI. Matching is deliberately loose: an older speaker rarely
+   says the exact phrase, and the recognizer mishears besides, so any
+   sentence that mentions opening and names an app counts.
+
+   Returns true when it handled the words, which tells the caller to stop.
+   Every command speaks a short confirmation first, because the app is about
+   to disappear from the screen and silence would look like a crash. */
+/* ---------- what TANDA can open and change ----------
+   Apps are opened by package name, which is what Android actually uses. A
+   URL scheme is a courtesy some apps offer and many do not; a package name
+   every app has.
+
+   Each entry lists several packages because the same app ships under
+   different names on different phones - the dialer and the camera especially
+   - and the first one present wins. */
+var VOICE_APPS = [
+  {pkgs:['com.facebook.orca'], web:'https://www.messenger.com', key:'appMsg',
+   words:['messenger','mesenger','masinger','mesinger','mesencher']},
+  {pkgs:['com.facebook.katana','com.facebook.lite'], web:'https://www.facebook.com', key:'appFB',
+   words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
+  {pkgs:['com.google.android.youtube'], web:'https://www.youtube.com', key:'appYT',
+   words:['youtube','you tube','yutub','yutyub','yutyob']},
+  {pkgs:['com.globe.gcash.android'], key:'appGCash',
+   words:['gcash','g cash','jicash','gikash']},
+  {pkgs:['com.viber.voip'], key:'appViber', words:['viber','vayber','bayber']},
+  {pkgs:['com.whatsapp'], key:'appWA', words:['whatsapp','watsap','wasap']},
+  {pkgs:['com.google.android.gm'], key:'appGmail', words:['gmail','email','imeyl']},
+  {pkgs:['com.google.android.apps.maps'], key:'appMaps', words:['maps','google maps','mapa']},
+  {pkgs:['com.zhiliaoapp.musically'], web:'https://www.tiktok.com', key:'appTikTok',
+   words:['tiktok','tik tok','tiktak']},
+  {pkgs:['com.shopee.ph'], web:'https://shopee.ph', key:'appShopee', words:['shopee','shope','sopi']},
+  {pkgs:['com.lazada.android'], web:'https://www.lazada.com.ph', key:'appLazada', words:['lazada','lasada']},
+  {pkgs:['com.google.android.GoogleCamera','com.android.camera2','com.android.camera',
+          'com.sec.android.app.camera','com.oppo.camera','com.huaqin.camera'],
+   key:'appCam', words:['camera','kamera','litrato','kuha ng litrato']},
+  {pkgs:['com.google.android.dialer','com.android.dialer','com.samsung.android.dialer'],
+   key:'appPhone', words:['dialer','phone app','telepono']},
+  {pkgs:['com.google.android.apps.photos','com.android.gallery3d'],
+   key:'appGallery', words:['gallery','galeri','album','mga litrato']},
+  {pkgs:['com.google.android.deskclock','com.android.deskclock'],
+   key:'appClock', words:['clock','orasan','alarm']},
+  {pkgs:['com.android.chrome'], web:'https://www.google.com', key:'appGoogle',
+   words:['google','gugol','chrome','browser']}
+];
+
+/* Settings screens are actions inside Android, not addresses, so they can
+   only be reached from native code. */
+var VOICE_SETTINGS = [
+  {which:'wifi',      key:'setWifi',  words:['wifi','wi-fi','waypay','internet']},
+  {which:'bluetooth', key:'setBT',    words:['bluetooth','blutut','bluetut']},
+  {which:'display',   key:'setDisp',  words:['display','brightness','liwanag','screen']},
+  {which:'sound',     key:'setSound', words:['sound','tunog','volume settings']},
+  {which:'battery',   key:'setBatt',  words:['battery','baterya']},
+  {which:'data',      key:'setData',  words:['mobile data','data']},
+  {which:'main',      key:'setMain',  words:['settings','setting','ayos ng telepono']}
+];
+
+var VOICE_OPEN = ['open','buksan','buksa','pakibuksan','punta','go to','pakibukas','bukas','ibukas'];
+
+function tandaSys(){
+  try{
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TandaSys){
+      return window.Capacitor.Plugins.TandaSys;
+    }
   }catch(e){}
+  return null;
 }
 
-/* ---------- opening the real app ----------
-   A guide about Messenger can end with a button that actually opens
-   Messenger. Plain https links are used rather than custom schemes such as
-   fb-messenger:// because Android hands a normal link to the installed app
-   when there is one, and falls back to the browser when there is not, so
-   nothing dead-ends.
-
-   The button always sits UNDER the guide, never instead of it. Dropping an
-   older person straight into Messenger without showing them what to do
-   first is how they end up stuck on a screen they did not ask for. */
-var APP_LINKS = {
-  fb:  {url:'https://www.facebook.com',  key:'openFB'},
-  msg: {url:'https://www.messenger.com', key:'openMsg'}
-};
-function openAppBtn(g){
-  var a = APP_LINKS[g.cat];
-  if(!a) return '';
-  return '<div style="height:8px"></div>'
-    + '<a class="btn small ghost" style="width:auto;padding:10px 14px;display:inline-block;text-decoration:none" '
-      + 'href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(t(a.key)) + '</a>';
+function sysSay(msg){
+  chat.push({role:'ai', text: msg});
+  render();
+  try{ speakOne(msg); }catch(e){}
 }
+
+/* Tries each package in turn. The first one on the phone is the one opened;
+   only when none of them is there does it fall back to a website, and only
+   when there is no website does it say so. */
+function launchApp(app){
+  var TS = tandaSys();
+  var label = t(app.key);
+
+  if(!TS){
+    if(app.web){ try{ window.location.href = app.web; }catch(e){} }
+    else sysSay(t('appNoOpen', {app: label}));
+    return;
+  }
+
+  try{ speakOne(t('openingApp', {app: label})); }catch(e){}
+
+  var i = 0;
+  function tryNext(){
+    if(i >= app.pkgs.length){
+      if(app.web){ try{ window.location.href = app.web; }catch(e){} }
+      else sysSay(t('appMissing', {app: label}));
+      return;
+    }
+    TS.openApp({ package: app.pkgs[i++] }).catch(function(){ tryNext(); });
+  }
+  setTimeout(tryNext, 900);
+}
+
+
+/* ---------- "play <something> on YouTube" ----------
+   Opening YouTube and playing a particular song are different requests, and
+   the second is the one people actually make. The words that carry the
+   command are stripped out and whatever is left is treated as the thing to
+   look for, which is handed to the YouTube app as a search.
+
+   Nothing tries to guess a video id or play it outright: the person is put
+   on the search results, where they choose. That also keeps this working
+   when the words come back slightly wrong, which they often do. */
+var PLAY_WORDS = ['play','i-play','iplay','patugtugin','patugtog','tugtugin','pakinggan',
+                  'buksan','search','hanapin','hanap','panoorin','panood'];
+var STRIP_WORDS = ['ang','ng','sa','mo','nga','po','yung','yong','ung','the','song','kanta',
+                   'kantang','music','musika','video','please','paki','naman','ko','na','ni',
+                   'on','in','at','to','for','of','natin','tayo','namin','nyo','ninyo','ako',
+                   'muna','ngayon','lang','din','rin','isang','yan','ito','ni','si'];
+
+function extractQuery(said, appWords){
+  var words = String(said).toLowerCase().replace(/[.,?!]/g, '').split(/\s+/);
+  var drop = PLAY_WORDS.concat(STRIP_WORDS, appWords || []);
+  var kept = words.filter(function(w){ return w && drop.indexOf(w) < 0; });
+  return kept.join(' ').trim();
+}
+
+function playOnYouTube(query, label){
+  var TS = tandaSys();
+  var url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  try{ speakOne(t('searching', {what: query, app: label})); }catch(e){}
+  setTimeout(function(){
+    if(TS && TS.openUrl){
+      /* Forced to the YouTube app first; without the package this lands in
+         the browser even when the app is installed. */
+      TS.openUrl({ url: url, package: 'com.google.android.youtube' })
+        .catch(function(){
+          TS.openUrl({ url: url }).catch(function(){
+            try{ window.location.href = url; }catch(e){}
+          });
+        });
+      return;
+    }
+    try{ window.location.href = url; }catch(e){}
+  }, 1100);
+}
+
+function runVoiceCommand(said){
+  var s = String(said || '').toLowerCase().trim();
+  if(!s) return false;
+
+  var wantsOpen = VOICE_OPEN.some(function(w){ return s.indexOf(w) >= 0; });
+  var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
+                   || s.indexOf('?') >= 0;
+
+  /* ---- louder, softer, brighter, dimmer ----
+     Matching is by stem, not by whole word. Tagalog builds meaning with
+     affixes - lakas becomes lakasan and palakasin, taas becomes taasan -
+     so anything anchored to word boundaries misses most of what people
+     actually say. That was why "lakasan ang brightness" fell through to
+     the AI and came back as a lesson. */
+  var TS = tandaSys();
+  function hasAny(list){ return list.some(function(w){ return s.indexOf(w) >= 0; }); }
+
+  var UP   = ['taas','lakas','palakas','itaas','angat','laki','dagdag','bright','louder',
+              'increase','higher','up '];
+  var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim'];
+  var VOL  = ['volume','tunog','boses','sound','audio'];
+  var BRI  = ['liwanag','bright','ilaw','screen','dilim','dim'];
+
+  var up = hasAny(UP), down = hasAny(DOWN);
+  var vol = hasAny(VOL), bri = hasAny(BRI);
+
+  if(TS && (vol || bri) && !isQuestion){
+    /* Naming the thing without a direction almost always means more of it:
+       "liwanag naman" is a request for light, not a question about it. */
+    var goUp = up || !down;
+
+    if(vol){
+      TS.bumpVolume({ direction: goUp ? 1 : -1 })
+        .catch(function(){ sysSay(t('sysFailed')); });
+      return true;
+    }
+    TS.setBrightness({ percent: goUp ? 100 : 25 }).then(function(res){
+      if(res && res.systemWide === false){
+        chat.push({role:'ai', text: t('brightAppOnly'), askPerm:true});
+        render();
+        try{ speakOne(t('brightAppOnly')); }catch(e){}
+      }else{
+        try{ speakOne(t(goUp ? 'brightUp' : 'brightDown')); }catch(e){}
+      }
+    }).catch(function(){ sysSay(t('sysFailed')); });
+    return true;
+  }
+
+  /* ---- settings screens ---- */
+  if(TS && (wantsOpen || /\b(settings|setting)\b/.test(s)) && !isQuestion){
+    for(var k=0;k<VOICE_SETTINGS.length;k++){
+      var st = VOICE_SETTINGS[k];
+      if(st.words.some(function(w){ return s.indexOf(w) >= 0; })){
+        try{ speakOne(t('openingApp', {app: t(st.key)})); }catch(e){}
+        var which = st.which;
+        setTimeout(function(){
+          TS.openSettings({ which: which }).catch(function(){ sysSay(t('sysFailed')); });
+        }, 900);
+        return true;
+      }
+    }
+  }
+
+  /* ---- playing or searching for something ---- */
+  var wantsPlay = PLAY_WORDS.some(function(w){ return s.indexOf(w) >= 0; });
+  var yt = VOICE_APPS.filter(function(a){ return a.key === 'appYT'; })[0];
+  if(wantsPlay && !isQuestion && yt && yt.words.some(function(w){ return s.indexOf(w) >= 0; })){
+    var q = extractQuery(s, yt.words);
+    if(q){ playOnYouTube(q, t('appYT')); return true; }
+  }
+
+  /* ---- other apps ---- */
+  for(var i=0;i<VOICE_APPS.length;i++){
+    var app = VOICE_APPS[i];
+    if(!app.words.some(function(w){ return s.indexOf(w) >= 0; })) continue;
+    /* A question about an app is a request to be taught, not to be moved. */
+    if(!wantsOpen && isQuestion) continue;
+    launchApp(app);
+    return true;
+  }
+
+  /* ---- moving around inside TANDA ---- */
+  var goes = [
+    {words:['games','laro','maglaro'], screen:'games'},
+    {words:['learn','gabay','aral','tutorial'], screen:'learn'},
+    {words:['home','bahay','simula'], screen:'home'},
+    {words:['me','profile','sarili'], screen:'me'}
+  ];
+  if(wantsOpen || /^(pumunta|punta|go)\b/.test(s)){
+    for(var g=0; g<goes.length; g++){
+      if(goes[g].words.some(function(w){ return s.indexOf(w) >= 0; })){
+        stopSpeak();
+        S.screen = goes[g].screen; S.modal = null; render();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
