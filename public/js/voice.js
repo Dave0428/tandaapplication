@@ -141,10 +141,14 @@ function stopBar(){
   if(el) return el;
   el = document.createElement('div');
   el.id = 'stopBar';
-  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:78px;z-index:9000;display:none';
-  el.innerHTML = '<button id="stopBarBtn" style="width:100%;padding:16px;border:none;border-radius:16px;'
-    + 'background:#D9614F;color:#fff;font-size:1.05rem;font-weight:800;box-shadow:0 6px 18px rgba(0,0,0,.25);'
-    + 'cursor:pointer"></button>';
+  /* A small pill in the corner rather than a bar across the screen. The
+     full-width version sat on top of whatever button came next, which on
+     the walkthrough meant covering "Susunod" - the one control the person
+     actually needed. */
+  el.style.cssText = 'position:fixed;right:12px;bottom:92px;z-index:9000;display:none';
+  el.innerHTML = '<button id="stopBarBtn" style="padding:12px 18px;border:none;border-radius:24px;'
+    + 'background:#D9614F;color:#fff;font-size:.95rem;font-weight:800;white-space:nowrap;'
+    + 'box-shadow:0 5px 16px rgba(0,0,0,.28);cursor:pointer"></button>';
   document.body.appendChild(el);
   el.querySelector('#stopBarBtn').addEventListener('click', function(){ stopSpeak(); });
   return el;
