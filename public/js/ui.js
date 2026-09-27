@@ -4,7 +4,8 @@ function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&
 
 function render(){
   var v = '';
-  if(!S.data.name && S.screen !== 'account') v = viewWelcome();
+  if(S.screen === 'tour') v = viewTour();
+  else if(!S.data.name && S.screen !== 'account') v = viewWelcome();
   else if(S.screen === 'home') v = viewHome();
   else if(S.screen === 'games') v = viewGames();
   else if(S.screen === 'game') v = viewGame();
@@ -13,6 +14,7 @@ function render(){
   else if(S.screen === 'ask') v = viewAsk();
   else if(S.screen === 'me') v = viewMe();
   else if(S.screen === 'account') v = viewAccount();
+  else if(S.screen === 'tour') v = viewTour();
   shell.innerHTML = v + (S.modal ? S.modal : '');
   refreshAiBits();
   if(S.screen === 'ask') scrollChat();
@@ -81,7 +83,8 @@ var GAMES = [
   {id:'match', icon:'🀄', tk:'matchT', sk:'matchS'},
   {id:'puzzle', icon:'🔢', tk:'puzT', sk:'puzS'},
   {id:'word', icon:'🔤', tk:'wordT', sk:'wordS'},
-  {id:'math', icon:'➕', tk:'mathT', sk:'mathS'}
+  {id:'math', icon:'➕', tk:'mathT', sk:'mathS'},
+  {id:'blocks', icon:'🧱', tk:'blocksT', sk:'blocksS'}
 ];
 function viewGames(){
   return '<div class="scroll">' + head(t('games'),'home')
@@ -116,11 +119,20 @@ function viewTutorial(){
   var x = tutById(S.tutorial);
   if(!x) return viewLearn();
   var done = !!S.data.done[x.id];
+  /* Each step can carry a picture of the real screen. The file is looked up
+     by name - img/<tutorial id>-<step number>.jpg - so adding a screenshot
+     means dropping the file in, with no data file to edit. If the file is
+     not there yet, onerror hides it and the step reads as plain text,
+     exactly as before. */
   var stepsHtml = x.steps.map(function(s, i){
     var txt = L(s);
+    var shot = 'img/' + x.id + '-' + (i+1) + '.jpg';
     return '<div class="step" data-step="'+i+'"><span class="step-num">'+(i+1)+'</span>'
-      + '<p style="flex:1">'+esc(txt)+'</p>'
-      + '<button class="say" data-act="say" data-arg="'+i+'" aria-label="'+esc(t('readStep'))+'">🔊</button></div>';
+      + '<div style="flex:1;min-width:0">'
+        + '<p style="margin:0">'+esc(txt)+'</p>'
+        + '<img class="stepshot" src="'+esc(shot)+'" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
+      + '</div>'
+      + '<button class="say" data-act="say" data-arg="'+i+'" aria-label="'+esc(t('readStep'))+'">\uD83D\uDD0A</button></div>';
   }).join('');
   return '<div class="scroll">' + head(x.icon + '  ' + L(x.title), 'learn')
     + '<div class="pad">'
@@ -151,7 +163,18 @@ var chat = [];
 function viewAsk(){
   var bubbles = chat.map(function(m, i){
     if(m.role === 'me') return '<div class="bub me">'+esc(m.text)+'</div>';
-    return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)+(m.pending?'':'<br><button class="say" data-act="sayai" data-arg="'+i+'">🔊 </button>')+'</div>';
+    var g = m.guide;
+    return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)
+      + (m.pending ? '' : '<br><button class="say" data-act="sayai" data-arg="'+i+'">\uD83D\uDD0A </button>')
+      + (g && !m.pending
+          ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'
+            + '<p class="muted" style="margin:0 0 6px;font-size:.82rem">'+esc(t('guideFound'))+'</p>'
+            + '<button class="btn small" style="width:auto;padding:10px 14px" data-act="tut" data-arg="'+esc(g.id)+'">'
+              + g.icon + '  ' + esc(L(g.title)) + '</button>'
+            + openAppBtn(g)
+            + '</div>'
+          : '')
+      + '</div>';
   }).join('');
   var intro = chat.length ? '' : '<div class="bub ai">'+esc(t('helperIntro'))+'</div>';
   return '<div class="shellcol" style="display:flex;flex-direction:column;flex:1;min-height:0">'
@@ -184,12 +207,16 @@ function sendAsk(text){
   aiAsk(turns, {
     cache:false, modelTier:'quick',
     onText:function(u){
-      chat[idx].text = u.text; chat[idx].pending = true;
+      /* The tag arrives character by character at the very end. Trimming a
+         partial one keeps "[GUID" from flashing on screen mid-answer. */
+      var live = String(u.text).replace(/\[GUIDE:?[a-z0-9\-]*\]?\s*$/i, '');
+      chat[idx].text = live; chat[idx].pending = true;
       var b = document.getElementById('bub'+idx);
-      if(b){ b.textContent = u.text; scrollChat(); }
+      if(b){ b.textContent = live; scrollChat(); }
     }
   }).then(function(r){
-    chat[idx] = {role:'ai', text:r.text};
+    var parted = splitGuideTag(r.text);
+    chat[idx] = {role:'ai', text:parted.text, guide:parted.guide};
     render();
   }).catch(function(e){
     // Temporary: show the real reason instead of only the generic message,
@@ -256,7 +283,117 @@ function viewMe(){
           + '<span class="dot">🛠️</span><div><h4>'+esc(t('adminT'))+'</h4><p>'+esc(t('adminS'))+'</p></div>'
           + '<span class="chev">›</span></a>'
         : '')
+    + '<button class="listitem" style="margin-bottom:14px" data-act="tourstart">'
+      + '<span class="dot">\uD83D\uDC4B</span>'
+      + '<div><h4>'+esc(t('tourAgain'))+'</h4><p>'+esc(t('tourAgainS'))+'</p></div>'
+      + '<span class="chev">\u203A</span></button>'
+    + badgeShelfHtml()
     + '<div class="card" style="margin-top:16px"><h4 style="font-family:\'Baloo 2\';margin:0 0 6px">'+esc(t('progress',{a:doneCount(), b:TUT.length}))+'</h4>'
       + '<p class="muted" style="margin:0">🔥 '+esc(t('streakT',{n:S.data.streak}))+'</p></div>'
     + '</div></div>' + nav('me');
+}
+
+/* ---------- badge shelf ----------
+   Every badge is drawn, earned or not. Seeing the empty ones is what makes
+   the earned ones mean anything, and it shows there is more to come. */
+function badgeShelfHtml(){
+  S.data.badges = S.data.badges || {};
+  var won = 0;
+  var cells = BADGES.map(function(b){
+    var have = !!S.data.badges[b.id];
+    if(have) won++;
+    return '<div style="text-align:center;width:72px;margin:6px 4px">'
+      + '<div style="font-size:1.9rem;line-height:1.1;opacity:' + (have ? '1' : '.22') + '">' + b.icon + '</div>'
+      + '<p class="muted" style="margin:2px 0 0;font-size:.68rem;line-height:1.25">' + esc(t('badge_'+b.id)) + '</p>'
+      + '</div>';
+  }).join('');
+  return '<div class="card" style="margin-top:16px">'
+    + '<h4 style="font-family:\'Baloo 2\';margin:0 0 2px">' + esc(t('badgesT')) + ' (' + won + '/' + BADGES.length + ')</h4>'
+    + '<p class="muted" style="margin:0 0 8px;font-size:.82rem">' + esc(t('badgesS')) + '</p>'
+    + '<div style="display:flex;flex-wrap:wrap;justify-content:center">' + cells + '</div>'
+    + '</div>';
+}
+
+/* ---------- first-run walkthrough ----------
+   Shown once, right after the name is entered. It answers the problem the
+   app itself creates: someone who does not know how to use a phone has to
+   learn this app before it can teach them anything. One idea per screen,
+   large type, and every card is read out loud without being asked, since
+   the whole point is that reading may be the hard part. */
+var TOUR = [
+  {icon:'\uD83D\uDC4B', t:'tour1T', b:'tour1B'},
+  {icon:'\uD83D\uDC47', t:'tour2T', b:'tour2B'},
+  {icon:'\uD83D\uDD0A', t:'tour3T', b:'tour3B'},
+  {icon:'\uD83D\uDD0E', t:'tour4T', b:'tour4B'},
+  {icon:'\uD83D\uDCA1', t:'tour5T', b:'tour5B'},
+  {icon:'\u2705', t:'tour6T', b:'tour6B'}
+];
+function viewTour(){
+  var i = S.tour || 0;
+  if(i >= TOUR.length) i = TOUR.length - 1;
+  var c = TOUR[i];
+  var last = i === TOUR.length - 1;
+  var title = t(c.t, {n: S.data.name || t('friend')});
+  var body  = t(c.b);
+
+  var dots = TOUR.map(function(_, k){
+    return '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px;'
+      + 'background:' + (k === i ? 'var(--teal)' : 'var(--line)') + '"></span>';
+  }).join('');
+
+  return '<div class="scroll" style="display:flex;flex-direction:column;padding:26px 24px">'
+    + '<div style="text-align:right;min-height:34px">'
+      + (last ? '' : '<button class="btn small ghost" style="width:auto;padding:8px 14px" data-act="tourskip">'
+          + esc(t('tourSkip')) + '</button>')
+    + '</div>'
+    + '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center">'
+      + '<div style="font-size:4rem;line-height:1.1;margin-bottom:14px">' + c.icon + '</div>'
+      + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.55rem;margin:0 0 12px">' + esc(title) + '</h1>'
+      + '<p style="font-size:1.12rem;line-height:1.65;margin:0 auto;max-width:420px">' + esc(body) + '</p>'
+      + '<div style="height:18px"></div>'
+      + '<button class="btn small ghost" style="width:auto;padding:10px 16px;margin:0 auto" data-act="toursay">'
+        + '\uD83D\uDD0A ' + esc(t('listen')) + '</button>'
+    + '</div>'
+    + '<div style="text-align:center;margin:18px 0 10px">' + dots + '</div>'
+    + '<button class="btn" data-act="tournext">' + esc(last ? t('tourDone') : t('tourNext')) + '</button>'
+    + (i > 0 ? '<div style="height:9px"></div><button class="btn ghost" data-act="tourprev">'
+        + esc(t('tourBack')) + '</button>' : '')
+    + '<div style="height:10px"></div>'
+    + '</div>';
+}
+/* Reading the card aloud is done here rather than inside viewTour, because
+   render() runs for every small change and would otherwise start the voice
+   over and over on the same card. */
+var tourSpoken = -1;
+function speakTourCard(force){
+  var i = S.tour || 0;
+  if(!force && tourSpoken === i) return;
+  tourSpoken = i;
+  var c = TOUR[i]; if(!c) return;
+  try{
+    warmUp();
+    speakList([t(c.t, {n: S.data.name || t('friend')}), t(c.b)]);
+  }catch(e){}
+}
+
+/* ---------- opening the real app ----------
+   A guide about Messenger can end with a button that actually opens
+   Messenger. Plain https links are used rather than custom schemes such as
+   fb-messenger:// because Android hands a normal link to the installed app
+   when there is one, and falls back to the browser when there is not, so
+   nothing dead-ends.
+
+   The button always sits UNDER the guide, never instead of it. Dropping an
+   older person straight into Messenger without showing them what to do
+   first is how they end up stuck on a screen they did not ask for. */
+var APP_LINKS = {
+  fb:  {url:'https://www.facebook.com',  key:'openFB'},
+  msg: {url:'https://www.messenger.com', key:'openMsg'}
+};
+function openAppBtn(g){
+  var a = APP_LINKS[g.cat];
+  if(!a) return '';
+  return '<div style="height:8px"></div>'
+    + '<a class="btn small ghost" style="width:auto;padding:10px 14px;display:inline-block;text-decoration:none" '
+      + 'href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(t(a.key)) + '</a>';
 }
