@@ -378,17 +378,17 @@ function bigReader(){
    the words an older Filipino speaker is likely to say for it - including
    the way the recognizer usually mangles them. */
 var VOICE_APPS = [
-  {url:'fb-messenger://',      key:'appMsg',    words:['messenger','mesenger','masinger','mesinger','mesencher','mesahe']},
-  {url:'fb://facewebmodal/f?href=https://www.facebook.com/', key:'appFB', words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
-  {url:'vnd.youtube://',       key:'appYT',     words:['youtube','you tube','yutub','yutyub','yutyob']},
+  {url:'fb-messenger://', web:'https://www.messenger.com', key:'appMsg', words:['messenger','mesenger','masinger','mesinger','mesencher','mesahe']},
+  {url:'fb://facewebmodal/f?href=https://www.facebook.com/', web:'https://www.facebook.com', key:'appFB', words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
+  {url:'vnd.youtube://', web:'https://www.youtube.com', key:'appYT', words:['youtube','you tube','yutub','yutyub','yutyob']},
   {url:'gcash://',             key:'appGCash',  words:['gcash','g cash','jicash','gikash']},
   {url:'viber://',             key:'appViber',  words:['viber','vayber','bayber']},
   {url:'whatsapp://',          key:'appWA',     words:['whatsapp','watsap','wasap']},
   {url:'googlegmail://',       key:'appGmail',  words:['gmail','email','imeyl','mail']},
   {url:'geo:0,0?q=',           key:'appMaps',   words:['maps','google maps','mapa']},
-  {url:'tiktok://',            key:'appTikTok', words:['tiktok','tik tok','tiktak']},
-  {url:'shopeeph://',          key:'appShopee', words:['shopee','shope','sopi']},
-  {url:'lazada://',            key:'appLazada', words:['lazada','lasada']},
+  {url:'tiktok://', web:'https://www.tiktok.com', key:'appTikTok', words:['tiktok','tik tok','tiktak']},
+  {url:'shopeeph://', web:'https://shopee.ph', key:'appShopee', words:['shopee','shope','sopi']},
+  {url:'lazada://', web:'https://www.lazada.com.ph', key:'appLazada', words:['lazada','lasada']},
   {url:'tel:',                 key:'appPhone',  words:['dialer','phone app','telepono','tumawag']},
   {url:'https://www.google.com', key:'appGoogle', words:['google','gugol','chrome','browser']}
 ];
@@ -418,35 +418,45 @@ function appLauncher(){
   return null;
 }
 
+/* Opens the app, or says plainly that it could not.
+
+   canOpenUrl is deliberately NOT used. Since Android 11 one app cannot ask
+   whether another exists without declaring it in the manifest, so that call
+   answers "no" for apps that are sitting right there on the phone. Actually
+   starting the app is not restricted in the same way, so the reliable move
+   is to try it and deal with the rejection. */
 function launchApp(app){
   var AL = appLauncher();
   var label = t(app.key);
 
-  if(AL && AL.canOpenUrl){
-    AL.canOpenUrl({ url: app.url }).then(function(res){
-      if(res && res.value){
-        try{ speakOne(t('openingApp', {app: label})); }catch(e){}
-        setTimeout(function(){ AL.openUrl({ url: app.url }); }, 900);
-      }else{
-        /* Saying so is the whole point. An older user who hears nothing
-           assumes they did it wrong. */
-        notInstalled(label);
-      }
-    }).catch(function(){ rawLaunch(app, label); });
-    return;
-  }
-  rawLaunch(app, label);
-}
-
-function rawLaunch(app, label){
   try{ speakOne(t('openingApp', {app: label})); }catch(e){}
+
   setTimeout(function(){
+    if(AL && AL.openUrl){
+      AL.openUrl({ url: app.url })
+        .then(function(res){
+          /* Some versions resolve with completed:false instead of rejecting. */
+          if(res && res.completed === false) webFallback(app, label);
+        })
+        .catch(function(){ webFallback(app, label); });
+      return;
+    }
+    /* No plugin: the only thing left is to navigate and hope Android takes
+       over. Nothing can be detected here, so no message is shown. */
     try{ window.location.href = app.url; }catch(e){}
   }, 900);
 }
 
-function notInstalled(label){
-  var msg = t('appMissing', {app: label});
+/* When the app itself will not open, the website is better than silence -
+   and better than a wrong claim that the app is missing. */
+function webFallback(app, label){
+  if(app.web){
+    var AL = appLauncher();
+    if(AL && AL.openUrl){ AL.openUrl({ url: app.web }).catch(function(){}); }
+    else { try{ window.location.href = app.web; }catch(e){} }
+    return;
+  }
+  var msg = t('appNoOpen', {app: label});
   chat.push({role:'ai', text: msg});
   render();
   try{ speakOne(msg); }catch(e){}
