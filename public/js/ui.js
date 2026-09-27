@@ -160,6 +160,7 @@ function viewTutorial(){
 
 /* ---------- ask (AI chat) ---------- */
 var chat = [];
+var askedByVoice = false;
 function viewAsk(){
   var bubbles = chat.map(function(m, i){
     if(m.role === 'me') return '<div class="bub me">'+esc(m.text)+'</div>';
@@ -218,6 +219,11 @@ function sendAsk(text){
     var parted = splitGuideTag(r.text);
     chat[idx] = {role:'ai', text:parted.text, guide:parted.guide};
     render();
+    /* A question that was spoken gets an answer that is spoken. Someone who
+       used the microphone did so because reading is the hard part, and
+       handing them back a wall of text would undo that. The stop bar shows
+       itself while this runs. */
+    if(askedByVoice){ askedByVoice = false; try{ speakOne(parted.text); }catch(e){} }
   }).catch(function(e){
     // Temporary: show the real reason instead of only the generic message,
     // so a stuck "Something went wrong" can actually be diagnosed on-device.
@@ -348,52 +354,4 @@ function viewTour(){
     + '</div>'
     + '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center">'
       + '<div style="font-size:4rem;line-height:1.1;margin-bottom:14px">' + c.icon + '</div>'
-      + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.55rem;margin:0 0 12px">' + esc(title) + '</h1>'
-      + '<p style="font-size:1.12rem;line-height:1.65;margin:0 auto;max-width:420px">' + esc(body) + '</p>'
-      + '<div style="height:18px"></div>'
-      + '<button class="btn small ghost" style="width:auto;padding:10px 16px;margin:0 auto" data-act="toursay">'
-        + '\uD83D\uDD0A ' + esc(t('listen')) + '</button>'
-    + '</div>'
-    + '<div style="text-align:center;margin:18px 0 10px">' + dots + '</div>'
-    + '<button class="btn" data-act="tournext">' + esc(last ? t('tourDone') : t('tourNext')) + '</button>'
-    + (i > 0 ? '<div style="height:9px"></div><button class="btn ghost" data-act="tourprev">'
-        + esc(t('tourBack')) + '</button>' : '')
-    + '<div style="height:10px"></div>'
-    + '</div>';
-}
-/* Reading the card aloud is done here rather than inside viewTour, because
-   render() runs for every small change and would otherwise start the voice
-   over and over on the same card. */
-var tourSpoken = -1;
-function speakTourCard(force){
-  var i = S.tour || 0;
-  if(!force && tourSpoken === i) return;
-  tourSpoken = i;
-  var c = TOUR[i]; if(!c) return;
-  try{
-    warmUp();
-    speakList([t(c.t, {n: S.data.name || t('friend')}), t(c.b)]);
-  }catch(e){}
-}
-
-/* ---------- opening the real app ----------
-   A guide about Messenger can end with a button that actually opens
-   Messenger. Plain https links are used rather than custom schemes such as
-   fb-messenger:// because Android hands a normal link to the installed app
-   when there is one, and falls back to the browser when there is not, so
-   nothing dead-ends.
-
-   The button always sits UNDER the guide, never instead of it. Dropping an
-   older person straight into Messenger without showing them what to do
-   first is how they end up stuck on a screen they did not ask for. */
-var APP_LINKS = {
-  fb:  {url:'https://www.facebook.com',  key:'openFB'},
-  msg: {url:'https://www.messenger.com', key:'openMsg'}
-};
-function openAppBtn(g){
-  var a = APP_LINKS[g.cat];
-  if(!a) return '';
-  return '<div style="height:8px"></div>'
-    + '<a class="btn small ghost" style="width:auto;padding:10px 14px;display:inline-block;text-decoration:none" '
-      + 'href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(t(a.key)) + '</a>';
-}
+      + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.55rem;margin:0 0 12px">' 
