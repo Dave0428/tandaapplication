@@ -412,6 +412,7 @@ var VOICE_APPS = [
    key:'appGallery', words:['gallery','galeri','album','mga litrato']},
   {pkgs:['com.google.android.deskclock','com.android.deskclock'],
    key:'appClock', words:['clock','orasan','alarm']},
+  {pkgs:['com.spotify.music'], key:'appSpotify', words:['spotify','ispotify','spoti']},
   {pkgs:['com.android.chrome'], web:'https://www.google.com', key:'appGoogle',
    words:['google','gugol','chrome','browser']}
 ];
@@ -496,19 +497,95 @@ function extractQuery(said, appWords){
   return kept.join(' ').trim();
 }
 
-function playOnYouTube(query, label){
+
+
+/* ---------- every app on the phone ----------
+   The curated list above knows how a handful of app names come back from the
+   speech recognizer. It cannot know about the banking app, the trading app,
+   or whatever else a particular person has installed, so the phone itself is
+   asked once and the answer kept for the rest of the session.
+
+   Matching is on the name the person sees under the icon, because that is
+   the name they will say. */
+var DEVICE_APPS = null;
+
+function loadDeviceApps(){
   var TS = tandaSys();
-  var url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  if(!TS || !TS.listApps) return Promise.resolve([]);
+  if(DEVICE_APPS) return Promise.resolve(DEVICE_APPS);
+  return TS.listApps().then(function(res){
+    DEVICE_APPS = (res && res.apps) || [];
+    return DEVICE_APPS;
+  }).catch(function(){ DEVICE_APPS = []; return DEVICE_APPS; });
+}
+
+function norm(x){ return String(x || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+/* Finds the installed app whose visible name best fits what was said.
+   Longer names win, so "Google Play Store" is preferred over "Google" when
+   both could fit - the longer match used more of the sentence and is
+   therefore the more specific reading. */
+function matchDeviceApp(said, apps){
+  var s = ' ' + norm(said) + ' ';
+  var best = null, bestLen = 0;
+  for(var i=0;i<apps.length;i++){
+    var label = norm(apps[i].label);
+    if(label.length < 3) continue;
+    if(s.indexOf(' ' + label + ' ') >= 0 && label.length > bestLen){
+      best = apps[i]; bestLen = label.length;
+    }
+  }
+  if(best) return best;
+  /* Nothing matched whole. Try the first word of each name, which covers
+     "open Exness" when the icon reads "Exness Trade". */
+  for(var j=0;j<apps.length;j++){
+    var first = norm(apps[j].label).split(' ')[0];
+    if(first.length >= 4 && s.indexOf(' ' + first + ' ') >= 0 && first.length > bestLen){
+      best = apps[j]; bestLen = first.length;
+    }
+  }
+  return best;
+}
+
+function launchByPackage(pkg, label){
+  var TS = tandaSys();
+  if(!TS) return;
+  try{ speakOne(t('openingApp', {app: label})); }catch(e){}
+  setTimeout(function(){
+    TS.openApp({ package: pkg }).catch(function(){ sysSay(t('appNoOpen', {app: label})); });
+  }, 900);
+}
+
+/* ---------- searching inside an app ----------
+   Each of these takes a query in its own way. Anything not listed here can
+   still be opened; it just cannot be searched from outside. */
+var SEARCH_APPS = [
+  {words:['youtube','you tube','yutub','yutyub','yutyob'], key:'appYT',
+   pkg:'com.google.android.youtube',
+   url:function(q){ return 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q); }},
+  {words:['spotify','ispotify','spoti'], key:'appSpotify',
+   pkg:'com.spotify.music',
+   url:function(q){ return 'spotify:search:' + encodeURIComponent(q); }},
+  {words:['facebook','fb','feysbuk','peysbuk','fesbuk'], key:'appFB',
+   pkg:'com.facebook.katana',
+   url:function(q){ return 'https://m.facebook.com/search/top/?q=' + encodeURIComponent(q); }},
+  {words:['google','gugol','chrome','browser'], key:'appGoogle',
+   pkg:null,
+   url:function(q){ return 'https://www.google.com/search?q=' + encodeURIComponent(q); }}
+];
+
+function searchInApp(entry, query){
+  var TS = tandaSys();
+  var url = entry.url(query);
+  var label = t(entry.key);
   try{ speakOne(t('searching', {what: query, app: label})); }catch(e){}
   setTimeout(function(){
     if(TS && TS.openUrl){
-      /* Forced to the YouTube app first; without the package this lands in
-         the browser even when the app is installed. */
-      TS.openUrl({ url: url, package: 'com.google.android.youtube' })
+      TS.openUrl({ url: url, package: entry.pkg || '' })
         .catch(function(){
-          TS.openUrl({ url: url }).catch(function(){
-            try{ window.location.href = url; }catch(e){}
-          });
+          /* Without the package it may land in a browser, which is still
+             better than nothing happening. */
+          TS.openUrl({ url: url }).catch(function(){ sysSay(t('appNoOpen', {app: label})); });
         });
       return;
     }
@@ -579,12 +656,16 @@ function runVoiceCommand(said){
     }
   }
 
-  /* ---- playing or searching for something ---- */
+  /* ---- playing or searching inside an app ---- */
   var wantsPlay = PLAY_WORDS.some(function(w){ return s.indexOf(w) >= 0; });
-  var yt = VOICE_APPS.filter(function(a){ return a.key === 'appYT'; })[0];
-  if(wantsPlay && !isQuestion && yt && yt.words.some(function(w){ return s.indexOf(w) >= 0; })){
-    var q = extractQuery(s, yt.words);
-    if(q){ playOnYouTube(q, t('appYT')); return true; }
+  if(wantsPlay && !isQuestion){
+    for(var sa=0; sa<SEARCH_APPS.length; sa++){
+      var ent = SEARCH_APPS[sa];
+      if(!ent.words.some(function(w){ return s.indexOf(w) >= 0; })) continue;
+      var q = extractQuery(s, ent.words);
+      if(q){ searchInApp(ent, q); return true; }
+      break;   /* named the app but gave nothing to look for - just open it */
+    }
   }
 
   /* ---- other apps ---- */
@@ -594,6 +675,18 @@ function runVoiceCommand(said){
     /* A question about an app is a request to be taught, not to be moved. */
     if(!wantsOpen && isQuestion) continue;
     launchApp(app);
+    return true;
+  }
+
+  /* ---- anything else installed on this phone ----
+     The curated list is only a head start. This is what makes "open Exness"
+     work without anyone having thought of Exness. */
+  if(tandaSys() && (wantsOpen || wantsPlay) && !isQuestion){
+    loadDeviceApps().then(function(apps){
+      var hit = matchDeviceApp(s, apps);
+      if(hit) launchByPackage(hit['package'], hit.label);
+      else sendAsk(said);   /* genuinely unknown - let the AI answer */
+    });
     return true;
   }
 
