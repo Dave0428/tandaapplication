@@ -6,18 +6,98 @@ function viewGame(){
   else if(S.game === 'word') body = gWord();
   else if(S.game === 'math') body = gMath();
   else if(S.game === 'trivia') body = gTrivia();
+  else if(S.game === 'blocks') body = gBlocks();
   var titleKey = (GAMES.filter(function(g){return g.id===S.game;})[0]||{}).tk || 'games';
   return '<div class="scroll">' + head(t(titleKey), 'games') + body + '</div>';
 }
+/* ---------- sound ----------
+   Short tones made by the browser itself. No audio files to download, so
+   this adds nothing to the size of the app and works with no connection.
+   Older players get almost no feedback from a silent screen: a rising
+   note for a correct move and a falling one for a wrong move tell them
+   what happened without having to read anything. */
+var AC = null;
+function tone(freq, ms, delay, vol){
+  try{
+    if(!AC){
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      AC = new Ctx();
+    }
+    if(AC.state === 'suspended') AC.resume();
+    var t0 = AC.currentTime + (delay || 0);
+    var osc = AC.createOscillator(), gain = AC.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(vol || 0.16, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + (ms/1000));
+    osc.connect(gain); gain.connect(AC.destination);
+    osc.start(t0); osc.stop(t0 + (ms/1000) + 0.02);
+  }catch(e){}
+}
+function soundRight(){ tone(660, 120, 0); tone(880, 160, 0.10); }
+function soundWrong(){ tone(300, 180, 0); }
+function soundLevel(){ tone(784,110,0); tone(988,110,0.09); tone(1175,200,0.18); }
+function soundWin(){ tone(523,150,0); tone(659,150,0.13); tone(784,150,0.26); tone(1047,320,0.39); }
+
+/* ---------- badges ----------
+   Earned once and kept. Small, visible proof that the time spent added up
+   to something, which a score alone does not give. */
+var BADGES = [
+  {id:'first',   icon:'\uD83C\uDF1F', need:function(d){ return (d.plays||0) >= 1; }},
+  {id:'five',    icon:'\uD83C\uDFAF', need:function(d){ return (d.plays||0) >= 5; }},
+  {id:'twenty',  icon:'\uD83C\uDFC5', need:function(d){ return (d.plays||0) >= 20; }},
+  {id:'streak3', icon:'\uD83D\uDD25', need:function(d){ return (d.streak||0) >= 3; }},
+  {id:'streak7', icon:'\u2B50', need:function(d){ return (d.streak||0) >= 7; }},
+  {id:'learn5',  icon:'\uD83D\uDCD6', need:function(d){ return doneCount() >= 5; }},
+  {id:'learnAll',icon:'\uD83C\uDF93', need:function(d){ return doneCount() >= TUT.length; }}
+];
+function earnedBadges(){
+  return BADGES.filter(function(b){ try{ return b.need(S.data); }catch(e){ return false; } });
+}
+/* Returns the badges won by the action that just happened, so the app can
+   celebrate them once instead of every time the screen is drawn. */
+function newBadges(){
+  S.data.badges = S.data.badges || {};
+  var fresh = earnedBadges().filter(function(b){ return !S.data.badges[b.id]; });
+  fresh.forEach(function(b){ S.data.badges[b.id] = true; });
+  if(fresh.length) save();
+  return fresh;
+}
+
 function winModal(msg, score){
+  S.data.plays = (S.data.plays||0)+1; save();
+  soundWin();
+
+  var fresh = newBadges();
+  var badgeHtml = fresh.length
+    ? '<div class="card" style="margin:10px 0 0;text-align:center">'
+      + '<p class="muted" style="margin:0 0 6px;font-size:.85rem">' + esc(t('newBadge')) + '</p>'
+      + fresh.map(function(b){
+          return '<div style="font-size:2rem;line-height:1.1">'+b.icon+'</div>'
+            + '<p style="margin:0;font-weight:700">'+esc(t('badge_'+b.id))+'</p>';
+        }).join('')
+      + '</div>'
+    : '';
+
+  var praise = t('praise'+(1 + Math.floor(Math.random()*3)), {n:S.data.name||t('friend')});
+
   S.modal = '<div class="backdrop"><div class="modal"><div class="ic">🏆</div>'
-    + '<h3>'+esc(t('won'))+'</h3><p>'+esc(msg || t('wonS',{n:S.data.name||t('friend')}))+'</p>'
+    + '<h3>'+esc(t('won'))+'</h3>'
+    + '<p style="font-weight:700;font-size:1.05rem;margin:0 0 4px">'+esc(praise)+'</p>'
+    + '<p>'+esc(msg || t('wonS',{n:S.data.name||t('friend')}))+'</p>'
+    + badgeHtml
+    + '<div style="height:10px"></div>'
     + '<button class="btn" data-act="replay">'+esc(t('restart'))+'</button>'
     + '<div style="height:9px"></div>'
     + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
-  S.data.plays = (S.data.plays||0)+1; save();
+
   if(window.TandaAPI && S.game) TandaAPI.recordGame(S.game, score != null ? score : 1, {});
   render();
+
+  /* Said out loud, because plenty of players will not stop to read it. */
+  try{ speakOne(praise); }catch(e){}
 }
 
 /* --- tile match --- */
@@ -46,10 +126,12 @@ function flip(i){
     var a = g.cards[g.open[0]], b = g.cards[g.open[1]];
     if(a.f === b.f){
       a.done = b.done = true; g.open = [];
+      soundRight();
       render();
       if(g.cards.every(function(x){return x.done;})) setTimeout(function(){ winModal(t('wonS',{n:S.data.name||t('friend')})+' ('+g.moves+' '+t('moves').toLowerCase()+')', g.moves); }, 400);
       return;
     }
+    soundWrong();
     g.lock = true; render();
     setTimeout(function(){ a.up=false; b.up=false; g.open=[]; g.lock=false; render(); }, 850);
     return;
@@ -122,26 +204,100 @@ function gWord(){
 }
 
 /* --- quick math --- */
-function initMath(){ S.g = {score:0, n:0}; nextMath(); }
+/* ---------- endless number game ----------
+   There is no last question. The sums keep coming and grow harder as the
+   level rises; three wrong answers end the round. What a player chases is
+   their own best score, which is a reason to open the app again tomorrow
+   that a fixed ten-question quiz never gives. */
+var MATH_LIVES = 3;
+var MATH_LEVEL_EVERY = 5;   /* correct answers needed to move up a level */
+
+function initMath(){
+  S.g = {score:0, n:0, lives:MATH_LIVES, level:1, streak:0, over:false};
+  nextMath();
+}
 function nextMath(){
-  var a = 2+Math.floor(Math.random()*30), b = 1+Math.floor(Math.random()*20);
-  var ops = ['+','-','×'];
-  var op = ops[Math.floor(Math.random()*(S.g.n>4?3:2))];
-  if(op==='×'){ a = 2+Math.floor(Math.random()*9); b = 2+Math.floor(Math.random()*9); }
-  if(op==='-' && b>a){ var tmp=a; a=b; b=tmp; }
-  var ans = op==='+'?a+b : op==='-'?a-b : a*b;
+  var lv = S.g.level || 1;
+  /* The range grows with the level, so the first questions stay easy
+     enough that a nervous player gets a few right before it bites. */
+  var top = 9 + lv * 6;
+  var a = 2 + Math.floor(Math.random()*top);
+  var b = 1 + Math.floor(Math.random()*Math.max(2, Math.floor(top*0.7)));
+  var ops = lv >= 3 ? ['+','-','\u00D7'] : (lv >= 2 ? ['+','-'] : ['+','-']);
+  var op = ops[Math.floor(Math.random()*ops.length)];
+  if(op === '\u00D7'){ a = 2+Math.floor(Math.random()*(3+lv)); b = 2+Math.floor(Math.random()*(3+lv)); }
+  if(op === '-' && b > a){ var tmp=a; a=b; b=tmp; }
+  var ans = op==='+' ? a+b : op==='-' ? a-b : a*b;
+
+  /* More choices later on, but never so many that the buttons shrink. */
+  var want = lv >= 4 ? 4 : 3;
   var opts = [ans];
-  while(opts.length<3){
-    var d = ans + (Math.floor(Math.random()*9)-4);
-    if(d !== ans && d >= 0 && opts.indexOf(d)<0) opts.push(d);
+  var guard = 0;
+  while(opts.length < want && guard++ < 60){
+    var spread = 3 + lv;
+    var d = ans + (Math.floor(Math.random()*(spread*2+1)) - spread);
+    if(d !== ans && d >= 0 && opts.indexOf(d) < 0) opts.push(d);
   }
   opts.sort(function(){ return Math.random()-.5; });
-  S.g.q = {a:a,b:b,op:op,ans:ans,opts:opts,picked:null};
+  S.g.q = {a:a, b:b, op:op, ans:ans, opts:opts, picked:null};
 }
+
+function mathBest(){ return (S.data.best && S.data.best.math) || 0; }
+function mathSaveBest(){
+  S.data.best = S.data.best || {};
+  if(S.g.score > (S.data.best.math||0)){ S.data.best.math = S.g.score; save(); return true; }
+  save(); return false;
+}
+
+/* Ends the round. Worth keeping separate from winModal: nobody won here,
+   and telling an older player they lost is the fastest way to make them
+   put the phone down. The wording stays on what they managed. */
+function mathOver(){
+  S.g.over = true;
+  var isBest = mathSaveBest();
+  S.data.plays = (S.data.plays||0)+1; save();
+  soundWin();
+
+  var fresh = newBadges();
+  var badgeHtml = fresh.length
+    ? '<div class="card" style="margin:10px 0 0;text-align:center">'
+      + '<p class="muted" style="margin:0 0 6px;font-size:.85rem">'+esc(t('newBadge'))+'</p>'
+      + fresh.map(function(b){
+          return '<div style="font-size:2rem;line-height:1.1">'+b.icon+'</div>'
+            + '<p style="margin:0;font-weight:700">'+esc(t('badge_'+b.id))+'</p>';
+        }).join('')
+      + '</div>'
+    : '';
+
+  var line = isBest ? t('newBest') : t('roundEndS', {n: S.data.name || t('friend')});
+
+  S.modal = '<div class="backdrop"><div class="modal"><div class="ic">'
+    + (isBest ? '\uD83C\uDF1F' : '\uD83D\uDC4F') + '</div>'
+    + '<h3>'+esc(t('roundEnd'))+'</h3>'
+    + '<p style="font-weight:700;font-size:1.05rem;margin:0 0 4px">'+esc(line)+'</p>'
+    + '<p style="font-size:2rem;font-weight:800;margin:6px 0;color:var(--teal)">'+S.g.score+'</p>'
+    + '<p class="muted" style="margin:0">'+esc(t('bestScore'))+': '+mathBest()+'</p>'
+    + badgeHtml
+    + '<div style="height:12px"></div>'
+    + '<button class="btn" data-act="replay">'+esc(t('playAgain'))+'</button>'
+    + '<div style="height:9px"></div>'
+    + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
+
+  if(window.TandaAPI) TandaAPI.recordGame('math', S.g.score, {level:S.g.level});
+  render();
+  try{ speakOne(line); }catch(e){}
+}
+
 function gMath(){
   if(!S.g.q) initMath();
   var q = S.g.q;
-  return '<div class="gamebar"><span>'+esc(t('score'))+': '+S.g.score+'</span><span>'+esc(t('question'))+' '+(S.g.n+1)+'/10</span></div>'
+  var hearts = '';
+  for(var i=0;i<MATH_LIVES;i++) hearts += (i < S.g.lives ? '\u2764\uFE0F' : '\uD83E\uDD0D');
+  return '<div class="gamebar">'
+      + '<span>'+esc(t('score'))+': '+S.g.score+'</span>'
+      + '<span>'+esc(t('level'))+' '+S.g.level+'</span>'
+      + '<span style="letter-spacing:2px">'+hearts+'</span>'
+    + '</div>'
     + '<div class="gwrap"><div class="card center"><p style="font-family:\'Baloo 2\';font-weight:800;font-size:2.2rem;margin:8px 0">'
     + q.a+' '+q.op+' '+q.b+' = ?</p></div>'
     + q.opts.map(function(o){
@@ -150,6 +306,8 @@ function gMath(){
         return '<button class="'+cls+'" data-act="math" data-arg="'+o+'">'+o+'</button>';
       }).join('')
     + (q.picked!==null ? '<button class="btn" data-act="nextmath">'+esc(t('next'))+'</button>' : '')
+    + '<p class="muted center" style="margin-top:12px;font-size:.85rem">'
+      + esc(t('bestScore'))+': '+mathBest()+'</p>'
     + '</div>';
 }
 
@@ -214,5 +372,216 @@ function gTrivia(){
         return '<button class="'+cls+'" data-act="triv" data-arg="'+i+'">'+esc(o)+'</button>';
       }).join('')
     + (S.g.picked!==null ? '<button class="btn" data-act="nexttriv">'+esc(t('next'))+'</button>' : '')
+    + '</div>';
+}
+
+/* ---------- falling blocks ----------
+   The endless one. Shapes drop, full rows disappear, and the round ends
+   when the stack reaches the top. Everything here is sized for a phone
+   held in one hand and for hands that are not quick: ten columns instead
+   of the usual ten-by-twenty tower, a slow first speed, and four buttons
+   large enough to hit without looking.
+
+   It does not go through render(). A full redraw of the shell sixty times
+   a round would be wasteful and would fight the tap handlers, so the tick
+   repaints only the cells. The loop stops itself when the board element
+   is gone from the page, which covers every way out of the screen without
+   needing navigation code to know about the game. */
+var BW = 10, BH = 16;
+var BLOCK_TICK_START = 900;   /* ms per drop at level 1 */
+var BLOCK_TICK_MIN   = 380;
+var blockTimer = null;
+
+var SHAPES = [
+  {c:'#4C8C7F', m:[[1,1,1,1]]},                 /* line  */
+  {c:'#E8A33D', m:[[1,1],[1,1]]},               /* square */
+  {c:'#D9614F', m:[[0,1,0],[1,1,1]]},           /* T */
+  {c:'#4C7A5C', m:[[0,1,1],[1,1,0]]},           /* S */
+  {c:'#C6822A', m:[[1,1,0],[0,1,1]]},           /* Z */
+  {c:'#1D4B45', m:[[1,0,0],[1,1,1]]},           /* J */
+  {c:'#8A6BA8', m:[[0,0,1],[1,1,1]]}            /* L */
+];
+
+function initBlocks(){
+  var grid = [];
+  for(var y=0;y<BH;y++){ grid.push(new Array(BW).fill(null)); }
+  S.g = {grid:grid, piece:null, px:0, py:0, score:0, lines:0, level:1, over:false};
+  spawnBlock();
+  startBlockLoop();
+}
+function spawnBlock(){
+  var sh = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+  S.g.piece = {c:sh.c, m:sh.m.map(function(r){ return r.slice(); })};
+  S.g.px = Math.floor((BW - S.g.piece.m[0].length)/2);
+  S.g.py = 0;
+  if(blockHits(S.g.px, S.g.py, S.g.piece.m)){ blocksOver(); }
+}
+function blockHits(px, py, m){
+  for(var y=0;y<m.length;y++){
+    for(var x=0;x<m[y].length;x++){
+      if(!m[y][x]) continue;
+      var gx = px+x, gy = py+y;
+      if(gx < 0 || gx >= BW || gy >= BH) return true;
+      if(gy >= 0 && S.g.grid[gy][gx]) return true;
+    }
+  }
+  return false;
+}
+function lockBlock(){
+  var m = S.g.piece.m;
+  for(var y=0;y<m.length;y++){
+    for(var x=0;x<m[y].length;x++){
+      if(m[y][x] && S.g.py+y >= 0) S.g.grid[S.g.py+y][S.g.px+x] = S.g.piece.c;
+    }
+  }
+  /* Clear full rows from the bottom up, so removing one does not shift the
+     rows still waiting to be checked. */
+  var cleared = 0;
+  for(var r=BH-1;r>=0;r--){
+    if(S.g.grid[r].every(function(v){ return v; })){
+      S.g.grid.splice(r,1);
+      S.g.grid.unshift(new Array(BW).fill(null));
+      cleared++; r++;
+    }
+  }
+  if(cleared){
+    S.g.lines += cleared;
+    S.g.score += [0,10,30,60,100][cleared] * S.g.level;
+    soundRight();
+    var lv = 1 + Math.floor(S.g.lines/5);
+    if(lv > S.g.level){ S.g.level = lv; soundLevel(); restartBlockLoop(); }
+  }
+  spawnBlock();
+}
+function blockDrop(){
+  if(S.g.over) return;
+  if(!blockHits(S.g.px, S.g.py+1, S.g.piece.m)){ S.g.py++; }
+  else { lockBlock(); }
+  paintBlocks();
+}
+function blockMove(dx){
+  if(S.g.over || !S.g.piece) return;
+  if(!blockHits(S.g.px+dx, S.g.py, S.g.piece.m)){ S.g.px += dx; paintBlocks(); }
+}
+function blockRotate(){
+  if(S.g.over || !S.g.piece) return;
+  var m = S.g.piece.m;
+  var r = [];
+  for(var x=0;x<m[0].length;x++){
+    var row = [];
+    for(var y=m.length-1;y>=0;y--) row.push(m[y][x]);
+    r.push(row);
+  }
+  /* If turning would push the shape through a wall, try nudging it in a
+     step or two before giving up. Without this a shape against the edge
+     simply refuses to turn, which reads as a broken button. */
+  var kicks = [0,-1,1,-2,2];
+  for(var k=0;k<kicks.length;k++){
+    if(!blockHits(S.g.px+kicks[k], S.g.py, r)){
+      S.g.px += kicks[k]; S.g.piece.m = r; paintBlocks(); return;
+    }
+  }
+}
+function blockSlam(){
+  if(S.g.over || !S.g.piece) return;
+  while(!blockHits(S.g.px, S.g.py+1, S.g.piece.m)) S.g.py++;
+  lockBlock(); paintBlocks();
+}
+
+function blockTickMs(){
+  return Math.max(BLOCK_TICK_MIN, BLOCK_TICK_START - (S.g.level-1)*70);
+}
+function startBlockLoop(){
+  stopBlockLoop();
+  blockTimer = setInterval(function(){
+    /* The board is gone means the player left the screen. Nothing else has
+       to remember to stop the game. */
+    if(!document.getElementById('blockGrid')){ stopBlockLoop(); return; }
+    if(S.g.over){ stopBlockLoop(); return; }
+    blockDrop();
+  }, blockTickMs());
+}
+function restartBlockLoop(){ if(blockTimer) startBlockLoop(); }
+function stopBlockLoop(){ if(blockTimer){ clearInterval(blockTimer); blockTimer = null; } }
+
+function blocksBest(){ return (S.data.best && S.data.best.blocks) || 0; }
+function blocksOver(){
+  S.g.over = true;
+  stopBlockLoop();
+  S.data.best = S.data.best || {};
+  var isBest = S.g.score > (S.data.best.blocks||0);
+  if(isBest) S.data.best.blocks = S.g.score;
+  S.data.plays = (S.data.plays||0)+1;
+  save();
+  soundWin();
+
+  var fresh = newBadges();
+  var badgeHtml = fresh.length
+    ? '<div class="card" style="margin:10px 0 0;text-align:center">'
+      + '<p class="muted" style="margin:0 0 6px;font-size:.85rem">'+esc(t('newBadge'))+'</p>'
+      + fresh.map(function(b){
+          return '<div style="font-size:2rem;line-height:1.1">'+b.icon+'</div>'
+            + '<p style="margin:0;font-weight:700">'+esc(t('badge_'+b.id))+'</p>';
+        }).join('')
+      + '</div>'
+    : '';
+
+  var line = isBest ? t('newBest') : t('roundEndS', {n: S.data.name || t('friend')});
+  S.modal = '<div class="backdrop"><div class="modal"><div class="ic">'
+    + (isBest ? '\uD83C\uDF1F' : '\uD83D\uDC4F') + '</div>'
+    + '<h3>'+esc(t('roundEnd'))+'</h3>'
+    + '<p style="font-weight:700;font-size:1.05rem;margin:0 0 4px">'+esc(line)+'</p>'
+    + '<p style="font-size:2rem;font-weight:800;margin:6px 0;color:var(--teal)">'+S.g.score+'</p>'
+    + '<p class="muted" style="margin:0">'+esc(t('rows'))+': '+S.g.lines+' \u00B7 '+esc(t('bestScore'))+': '+blocksBest()+'</p>'
+    + badgeHtml
+    + '<div style="height:12px"></div>'
+    + '<button class="btn" data-act="replay">'+esc(t('playAgain'))+'</button>'
+    + '<div style="height:9px"></div>'
+    + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
+  render();
+  try{ speakOne(line); }catch(e){}
+}
+
+/* Repaints only the cells and the score line. */
+function paintBlocks(){
+  var el = document.getElementById('blockGrid');
+  if(!el) return;
+  var m = S.g.piece ? S.g.piece.m : [];
+  var cells = '';
+  for(var y=0;y<BH;y++){
+    for(var x=0;x<BW;x++){
+      var col = S.g.grid[y][x];
+      if(!col && S.g.piece){
+        var ly = y - S.g.py, lx = x - S.g.px;
+        if(ly>=0 && ly<m.length && lx>=0 && lx<m[ly].length && m[ly][lx]) col = S.g.piece.c;
+      }
+      cells += '<i style="background:' + (col || 'var(--teal-soft)') + '"></i>';
+    }
+  }
+  el.innerHTML = cells;
+  var sc = document.getElementById('blockScore');
+  if(sc) sc.textContent = t('score')+': '+S.g.score;
+  var lv = document.getElementById('blockLevel');
+  if(lv) lv.textContent = t('level')+' '+S.g.level;
+}
+
+function gBlocks(){
+  if(!S.g.grid) initBlocks();
+  setTimeout(function(){ paintBlocks(); if(!blockTimer && !S.g.over) startBlockLoop(); }, 0);
+  return '<div class="gamebar">'
+      + '<span id="blockScore">'+esc(t('score'))+': '+S.g.score+'</span>'
+      + '<span id="blockLevel">'+esc(t('level'))+' '+S.g.level+'</span>'
+      + '<button class="btn small ghost" data-act="replay">'+esc(t('restart'))+'</button>'
+    + '</div>'
+    + '<div class="gwrap">'
+      + '<div id="blockGrid" class="block-grid" style="grid-template-columns:repeat('+BW+',1fr)"></div>'
+      + '<div class="block-pad">'
+        + '<button class="bpad" data-act="bleft">\u2190</button>'
+        + '<button class="bpad" data-act="brot">\u21BB</button>'
+        + '<button class="bpad" data-act="bright">\u2192</button>'
+        + '<button class="bpad wide" data-act="bdown">\u2193 '+esc(t('drop'))+'</button>'
+      + '</div>'
+      + '<p class="muted center" style="margin-top:10px;font-size:.85rem">'
+        + esc(t('bestScore'))+': '+blocksBest()+'</p>'
     + '</div>';
 }
