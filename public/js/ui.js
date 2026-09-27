@@ -111,7 +111,13 @@ function viewLearn(){
           + '<div style="flex:1"><h4>'+esc(L(x.title))+' '+(done?'<span class="done-badge">✓ '+esc(t('doneY'))+'</span>':'')+'</h4>'
           + '<p>'+esc(L(x.sub))+' · '+x.steps.length+' '+esc(t('steps'))+'</p></div>'
           + '<span class="chev">›</span></button>';
-      }).join('') + '</div></div>' + nav('learn');
+      }).join('') + '</div>'
+    + '<div class="pad" style="padding-top:0">'
+      + '<button class="card" style="width:100%;text-align:left;border:none;cursor:pointer" data-act="go" data-arg="ask">'
+        + '<p style="margin:0 0 4px;font-weight:700">' + esc(t('notHereT')) + '</p>'
+        + '<p class="muted" style="margin:0;font-size:.88rem">' + esc(t('notHereS')) + '</p>'
+      + '</button></div>'
+    + '</div>' + nav('learn');
 }
 
 /* ---------- tutorial ---------- */
@@ -167,6 +173,10 @@ function viewAsk(){
     var g = m.guide;
     return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)
       + (m.pending ? '' : '<br><button class="say" data-act="sayai" data-arg="'+i+'">\uD83D\uDD0A </button>')
+      + (m.askPerm && !m.pending
+          ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
+            + 'data-act="grantbright">' + esc(t('grantBright')) + '</button></div>'
+          : '')
       + (g && !m.pending
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">'
             + '<p class="muted" style="margin:0 0 6px;font-size:.82rem">'+esc(t('guideFound'))+'</p>'
@@ -189,7 +199,7 @@ function viewAsk(){
       + '<button class="chip" data-act="chip" data-arg="3">'+esc(t('suggest3'))+'</button>'
     + '</div>'
     + '<div class="composer"><textarea id="askIn" rows="1" placeholder="'+esc(t('typeHere'))+'"></textarea>'
-    + (sttSupported() ? '<button class="send ghost" data-act="mic" aria-label="'+esc(t('voiceInput'))+'">🎤</button>' : '')
+    + (sttSupported() ? '<button class="send ghost" id="askMicBtn" data-act="mic" aria-label="'+esc(t('voiceInput'))+'">🎤</button>' : '')
     + '<button class="send" data-act="send" aria-label="'+esc(t('send'))+'">➤</button></div>'
     + '</div>' + nav('ask');
 }
@@ -357,7 +367,7 @@ function viewTour(){
       + '<h1 style="font-family:\'Baloo 2\';font-weight:800;font-size:1.55rem;margin:0 0 12px">' + esc(title) + '</h1>'
       + '<p style="font-size:1.12rem;line-height:1.65;margin:0 auto;max-width:420px">' + esc(body) + '</p>'
       + '<div style="height:18px"></div>'
-      + '<button class="btn small ghost" style="width:auto;padding:10px 16px;margin:0 auto" data-act="toursay">'
+      + '<button class="btn small ghost" id="tourSayBtn" style="width:auto;padding:10px 16px;margin:0 auto" data-act="toursay">'
         + '\uD83D\uDD0A ' + esc(t('listen')) + '</button>'
     + '</div>'
     + '<div style="text-align:center;margin:18px 0 10px">' + dots + '</div>'
