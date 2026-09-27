@@ -136,37 +136,29 @@ function stopListening(){
    handler, so it survives every redraw and works from any screen. It is
    deliberately large and sits above the bottom navigation, where a thumb
    already rests. */
-function stopBar(){
-  var el = document.getElementById('stopBar');
-  if(el) return el;
-  el = document.createElement('div');
-  el.id = 'stopBar';
-  /* A small pill in the corner rather than a bar across the screen. The
-     full-width version sat on top of whatever button came next, which on
-     the walkthrough meant covering "Susunod" - the one control the person
-     actually needed. */
-  /* Top centre. Every crowded part of this app is at the bottom - the
-     navigation, the Next and Back buttons, the chips - so a control that
-     floats there will always end up on top of something. The strip under
-     the status bar is the one place that is reliably free. */
-  el.style.cssText = 'position:fixed;left:0;right:0;top:8px;z-index:9000;display:none;text-align:center;pointer-events:none';
-  el.innerHTML = '<button id="stopBarBtn" style="pointer-events:auto;padding:11px 20px;border:none;'
-    + 'border-radius:24px;background:#D9614F;color:#fff;font-size:.95rem;font-weight:800;'
-    + 'white-space:nowrap;box-shadow:0 5px 16px rgba(0,0,0,.28);cursor:pointer"></button>';
-  document.body.appendChild(el);
-  el.querySelector('#stopBarBtn').addEventListener('click', function(){ stopSpeak(); });
-  return el;
+/* ---------- one obvious way to stop the voice ----------
+   Nothing floats. A pill hovering over the screen always lands on top of
+   something - on the walkthrough it covered Skip, then Next, then Skip
+   again - so instead the button that is already on the screen changes into
+   a stop button while the phone is talking, and changes back when it
+   finishes. The tutorial screen has done this from the start; this extends
+   the same idea to the walkthrough and the Ask screen. */
+function swapStopControls(on){
+  /* Walkthrough: the "Listen" button. */
+  var tb = document.getElementById('tourSayBtn');
+  if(tb){
+    tb.textContent = on ? ('\u23F9  ' + t('stopVoice')) : ('\uD83D\uDD0A ' + t('listen'));
+    tb.setAttribute('data-act', on ? 'stopspeak' : 'toursay');
+  }
+  /* Ask: the microphone, which is useless while the phone is speaking. */
+  var mb = document.getElementById('askMicBtn');
+  if(mb){
+    mb.textContent = on ? '\u23F9' : '\uD83C\uDFA4';
+    mb.setAttribute('data-act', on ? 'stopspeak' : 'mic');
+  }
 }
-function showStopBar(){
-  var el = stopBar();
-  var b = el.querySelector('#stopBarBtn');
-  if(b) b.textContent = '\u23F9  ' + t('stopVoice');
-  el.style.display = 'block';
-}
-function hideStopBar(){
-  var el = document.getElementById('stopBar');
-  if(el) el.style.display = 'none';
-}
+function showStopBar(){ swapStopControls(true); }
+function hideStopBar(){ swapStopControls(false); }
 
 /* ---------- voice ---------- */
 var VOICES = [];
