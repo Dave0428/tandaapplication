@@ -398,4 +398,190 @@ var SHAPES = [
   {c:'#D9614F', m:[[0,1,0],[1,1,1]]},           /* T */
   {c:'#4C7A5C', m:[[0,1,1],[1,1,0]]},           /* S */
   {c:'#C6822A', m:[[1,1,0],[0,1,1]]},           /* Z */
-  {c:'#
+  {c:'#1D4B45', m:[[1,0,0],[1,1,1]]},           /* J */
+  {c:'#8A6BA8', m:[[0,0,1],[1,1,1]]}            /* L */
+];
+
+function initBlocks(){
+  var grid = [];
+  for(var y=0;y<BH;y++){ grid.push(new Array(BW).fill(null)); }
+  S.g = {grid:grid, piece:null, px:0, py:0, score:0, lines:0, level:1, over:false};
+  spawnBlock();
+  startBlockLoop();
+}
+function spawnBlock(){
+  var sh = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+  S.g.piece = {c:sh.c, m:sh.m.map(function(r){ return r.slice(); })};
+  S.g.px = Math.floor((BW - S.g.piece.m[0].length)/2);
+  S.g.py = 0;
+  if(blockHits(S.g.px, S.g.py, S.g.piece.m)){ blocksOver(); }
+}
+function blockHits(px, py, m){
+  for(var y=0;y<m.length;y++){
+    for(var x=0;x<m[y].length;x++){
+      if(!m[y][x]) continue;
+      var gx = px+x, gy = py+y;
+      if(gx < 0 || gx >= BW || gy >= BH) return true;
+      if(gy >= 0 && S.g.grid[gy][gx]) return true;
+    }
+  }
+  return false;
+}
+function lockBlock(){
+  var m = S.g.piece.m;
+  for(var y=0;y<m.length;y++){
+    for(var x=0;x<m[y].length;x++){
+      if(m[y][x] && S.g.py+y >= 0) S.g.grid[S.g.py+y][S.g.px+x] = S.g.piece.c;
+    }
+  }
+  /* Clear full rows from the bottom up, so removing one does not shift the
+     rows still waiting to be checked. */
+  var cleared = 0;
+  for(var r=BH-1;r>=0;r--){
+    if(S.g.grid[r].every(function(v){ return v; })){
+      S.g.grid.splice(r,1);
+      S.g.grid.unshift(new Array(BW).fill(null));
+      cleared++; r++;
+    }
+  }
+  if(cleared){
+    S.g.lines += cleared;
+    S.g.score += [0,10,30,60,100][cleared] * S.g.level;
+    soundRight();
+    var lv = 1 + Math.floor(S.g.lines/5);
+    if(lv > S.g.level){ S.g.level = lv; soundLevel(); restartBlockLoop(); }
+  }
+  spawnBlock();
+}
+function blockDrop(){
+  if(S.g.over) return;
+  if(!blockHits(S.g.px, S.g.py+1, S.g.piece.m)){ S.g.py++; }
+  else { lockBlock(); }
+  paintBlocks();
+}
+function blockMove(dx){
+  if(S.g.over || !S.g.piece) return;
+  if(!blockHits(S.g.px+dx, S.g.py, S.g.piece.m)){ S.g.px += dx; paintBlocks(); }
+}
+function blockRotate(){
+  if(S.g.over || !S.g.piece) return;
+  var m = S.g.piece.m;
+  var r = [];
+  for(var x=0;x<m[0].length;x++){
+    var row = [];
+    for(var y=m.length-1;y>=0;y--) row.push(m[y][x]);
+    r.push(row);
+  }
+  /* If turning would push the shape through a wall, try nudging it in a
+     step or two before giving up. Without this a shape against the edge
+     simply refuses to turn, which reads as a broken button. */
+  var kicks = [0,-1,1,-2,2];
+  for(var k=0;k<kicks.length;k++){
+    if(!blockHits(S.g.px+kicks[k], S.g.py, r)){
+      S.g.px += kicks[k]; S.g.piece.m = r; paintBlocks(); return;
+    }
+  }
+}
+function blockSlam(){
+  if(S.g.over || !S.g.piece) return;
+  while(!blockHits(S.g.px, S.g.py+1, S.g.piece.m)) S.g.py++;
+  lockBlock(); paintBlocks();
+}
+
+function blockTickMs(){
+  return Math.max(BLOCK_TICK_MIN, BLOCK_TICK_START - (S.g.level-1)*70);
+}
+function startBlockLoop(){
+  stopBlockLoop();
+  blockTimer = setInterval(function(){
+    /* The board is gone means the player left the screen. Nothing else has
+       to remember to stop the game. */
+    if(!document.getElementById('blockGrid')){ stopBlockLoop(); return; }
+    if(S.g.over){ stopBlockLoop(); return; }
+    blockDrop();
+  }, blockTickMs());
+}
+function restartBlockLoop(){ if(blockTimer) startBlockLoop(); }
+function stopBlockLoop(){ if(blockTimer){ clearInterval(blockTimer); blockTimer = null; } }
+
+function blocksBest(){ return (S.data.best && S.data.best.blocks) || 0; }
+function blocksOver(){
+  S.g.over = true;
+  stopBlockLoop();
+  S.data.best = S.data.best || {};
+  var isBest = S.g.score > (S.data.best.blocks||0);
+  if(isBest) S.data.best.blocks = S.g.score;
+  S.data.plays = (S.data.plays||0)+1;
+  save();
+  soundWin();
+
+  var fresh = newBadges();
+  var badgeHtml = fresh.length
+    ? '<div class="card" style="margin:10px 0 0;text-align:center">'
+      + '<p class="muted" style="margin:0 0 6px;font-size:.85rem">'+esc(t('newBadge'))+'</p>'
+      + fresh.map(function(b){
+          return '<div style="font-size:2rem;line-height:1.1">'+b.icon+'</div>'
+            + '<p style="margin:0;font-weight:700">'+esc(t('badge_'+b.id))+'</p>';
+        }).join('')
+      + '</div>'
+    : '';
+
+  var line = isBest ? t('newBest') : t('roundEndS', {n: S.data.name || t('friend')});
+  S.modal = '<div class="backdrop"><div class="modal"><div class="ic">'
+    + (isBest ? '\uD83C\uDF1F' : '\uD83D\uDC4F') + '</div>'
+    + '<h3>'+esc(t('roundEnd'))+'</h3>'
+    + '<p style="font-weight:700;font-size:1.05rem;margin:0 0 4px">'+esc(line)+'</p>'
+    + '<p style="font-size:2rem;font-weight:800;margin:6px 0;color:var(--teal)">'+S.g.score+'</p>'
+    + '<p class="muted" style="margin:0">'+esc(t('rows'))+': '+S.g.lines+' \u00B7 '+esc(t('bestScore'))+': '+blocksBest()+'</p>'
+    + badgeHtml
+    + '<div style="height:12px"></div>'
+    + '<button class="btn" data-act="replay">'+esc(t('playAgain'))+'</button>'
+    + '<div style="height:9px"></div>'
+    + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
+  render();
+  try{ speakOne(line); }catch(e){}
+}
+
+/* Repaints only the cells and the score line. */
+function paintBlocks(){
+  var el = document.getElementById('blockGrid');
+  if(!el) return;
+  var m = S.g.piece ? S.g.piece.m : [];
+  var cells = '';
+  for(var y=0;y<BH;y++){
+    for(var x=0;x<BW;x++){
+      var col = S.g.grid[y][x];
+      if(!col && S.g.piece){
+        var ly = y - S.g.py, lx = x - S.g.px;
+        if(ly>=0 && ly<m.length && lx>=0 && lx<m[ly].length && m[ly][lx]) col = S.g.piece.c;
+      }
+      cells += '<i style="background:' + (col || 'var(--teal-soft)') + '"></i>';
+    }
+  }
+  el.innerHTML = cells;
+  var sc = document.getElementById('blockScore');
+  if(sc) sc.textContent = t('score')+': '+S.g.score;
+  var lv = document.getElementById('blockLevel');
+  if(lv) lv.textContent = t('level')+' '+S.g.level;
+}
+
+function gBlocks(){
+  if(!S.g.grid) initBlocks();
+  setTimeout(function(){ paintBlocks(); if(!blockTimer && !S.g.over) startBlockLoop(); }, 0);
+  return '<div class="gamebar">'
+      + '<span id="blockScore">'+esc(t('score'))+': '+S.g.score+'</span>'
+      + '<span id="blockLevel">'+esc(t('level'))+' '+S.g.level+'</span>'
+      + '<button class="btn small ghost" data-act="replay">'+esc(t('restart'))+'</button>'
+    + '</div>'
+    + '<div class="gwrap">'
+      + '<div id="blockGrid" class="block-grid" style="grid-template-columns:repeat('+BW+',1fr)"></div>'
+      + '<div class="block-pad">'
+        + '<button class="bpad" data-act="bleft">\u2190</button>'
+        + '<button class="bpad" data-act="brot">\u21BB</button>'
+        + '<button class="bpad" data-act="bright">\u2192</button>'
+        + '<button class="bpad wide" data-act="bdown">\u2193 '+esc(t('drop'))+'</button>'
+      + '</div>'
+      + '<p class="muted center" style="margin-top:10px;font-size:.85rem">'
+        + esc(t('bestScore'))+': '+blocksBest()+'</p>'
+    + '</div>';
+}
