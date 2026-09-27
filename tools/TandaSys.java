@@ -2,10 +2,15 @@ package ph.tanda.app;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.provider.Settings;
 
+import java.util.List;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -64,6 +69,37 @@ public class TandaSys extends Plugin {
         } catch (Exception e) {
             call.reject("failed: " + e.getMessage());
         }
+    }
+
+    /** Every app on the phone that has an icon in the launcher, with the
+     *  name the person actually sees.
+     *
+     *  A hardcoded list can only ever know the apps someone thought of in
+     *  advance, which is no use to a user who has Exness or Spotify or a
+     *  bank app. Asking the phone means the answer is whatever is really
+     *  there. The launcher intent in the manifest's queries block is what
+     *  makes this visible on Android 11 and newer. */
+    @PluginMethod
+    public void listApps(PluginCall call) {
+        JSArray out = new JSArray();
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            Intent main = new Intent(Intent.ACTION_MAIN, null);
+            main.addCategory(Intent.CATEGORY_LAUNCHER);
+            List<ResolveInfo> apps = pm.queryIntentActivities(main, 0);
+            for (ResolveInfo ri : apps) {
+                JSObject o = new JSObject();
+                o.put("label", String.valueOf(ri.loadLabel(pm)));
+                o.put("package", ri.activityInfo.packageName);
+                out.put(o);
+            }
+        } catch (Exception e) {
+            call.reject("failed: " + e.getMessage());
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("apps", out);
+        call.resolve(ret);
     }
 
     /** True when the app is on the phone. Used to tell someone their app is
