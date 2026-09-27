@@ -373,93 +373,98 @@ function bigReader(){
    Returns true when it handled the words, which tells the caller to stop.
    Every command speaks a short confirmation first, because the app is about
    to disappear from the screen and silence would look like a crash. */
-/* ---------- the apps TANDA can open ----------
-   Each entry is a deep link that Android hands to the installed app, plus
-   the words an older Filipino speaker is likely to say for it - including
-   the way the recognizer usually mangles them. */
+/* ---------- what TANDA can open and change ----------
+   Apps are opened by package name, which is what Android actually uses. A
+   URL scheme is a courtesy some apps offer and many do not; a package name
+   every app has.
+
+   Each entry lists several packages because the same app ships under
+   different names on different phones - the dialer and the camera especially
+   - and the first one present wins. */
 var VOICE_APPS = [
-  {url:'fb-messenger://', web:'https://www.messenger.com', key:'appMsg', words:['messenger','mesenger','masinger','mesinger','mesencher','mesahe']},
-  {url:'fb://facewebmodal/f?href=https://www.facebook.com/', web:'https://www.facebook.com', key:'appFB', words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
-  {url:'vnd.youtube://', web:'https://www.youtube.com', key:'appYT', words:['youtube','you tube','yutub','yutyub','yutyob']},
-  {url:'gcash://',             key:'appGCash',  words:['gcash','g cash','jicash','gikash']},
-  {url:'viber://',             key:'appViber',  words:['viber','vayber','bayber']},
-  {url:'whatsapp://',          key:'appWA',     words:['whatsapp','watsap','wasap']},
-  {url:'googlegmail://',       key:'appGmail',  words:['gmail','email','imeyl','mail']},
-  {url:'geo:0,0?q=',           key:'appMaps',   words:['maps','google maps','mapa']},
-  {url:'tiktok://', web:'https://www.tiktok.com', key:'appTikTok', words:['tiktok','tik tok','tiktak']},
-  {url:'shopeeph://', web:'https://shopee.ph', key:'appShopee', words:['shopee','shope','sopi']},
-  {url:'lazada://', web:'https://www.lazada.com.ph', key:'appLazada', words:['lazada','lasada']},
-  {url:'tel:',                 key:'appPhone',  words:['dialer','phone app','telepono','tumawag']},
-  {url:'https://www.google.com', key:'appGoogle', words:['google','gugol','chrome','browser']}
+  {pkgs:['com.facebook.orca'], web:'https://www.messenger.com', key:'appMsg',
+   words:['messenger','mesenger','masinger','mesinger','mesencher']},
+  {pkgs:['com.facebook.katana','com.facebook.lite'], web:'https://www.facebook.com', key:'appFB',
+   words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
+  {pkgs:['com.google.android.youtube'], web:'https://www.youtube.com', key:'appYT',
+   words:['youtube','you tube','yutub','yutyub','yutyob']},
+  {pkgs:['com.globe.gcash.android'], key:'appGCash',
+   words:['gcash','g cash','jicash','gikash']},
+  {pkgs:['com.viber.voip'], key:'appViber', words:['viber','vayber','bayber']},
+  {pkgs:['com.whatsapp'], key:'appWA', words:['whatsapp','watsap','wasap']},
+  {pkgs:['com.google.android.gm'], key:'appGmail', words:['gmail','email','imeyl']},
+  {pkgs:['com.google.android.apps.maps'], key:'appMaps', words:['maps','google maps','mapa']},
+  {pkgs:['com.zhiliaoapp.musically'], web:'https://www.tiktok.com', key:'appTikTok',
+   words:['tiktok','tik tok','tiktak']},
+  {pkgs:['com.shopee.ph'], web:'https://shopee.ph', key:'appShopee', words:['shopee','shope','sopi']},
+  {pkgs:['com.lazada.android'], web:'https://www.lazada.com.ph', key:'appLazada', words:['lazada','lasada']},
+  {pkgs:['com.google.android.GoogleCamera','com.android.camera2','com.android.camera',
+          'com.sec.android.app.camera','com.oppo.camera','com.huaqin.camera'],
+   key:'appCam', words:['camera','kamera','litrato','kuha ng litrato']},
+  {pkgs:['com.google.android.dialer','com.android.dialer','com.samsung.android.dialer'],
+   key:'appPhone', words:['dialer','phone app','telepono']},
+  {pkgs:['com.google.android.apps.photos','com.android.gallery3d'],
+   key:'appGallery', words:['gallery','galeri','album','mga litrato']},
+  {pkgs:['com.google.android.deskclock','com.android.deskclock'],
+   key:'appClock', words:['clock','orasan','alarm']},
+  {pkgs:['com.android.chrome'], web:'https://www.google.com', key:'appGoogle',
+   words:['google','gugol','chrome','browser']}
 ];
+
+/* Settings screens are actions inside Android, not addresses, so they can
+   only be reached from native code. */
+var VOICE_SETTINGS = [
+  {which:'wifi',      key:'setWifi',  words:['wifi','wi-fi','waypay','internet']},
+  {which:'bluetooth', key:'setBT',    words:['bluetooth','blutut','bluetut']},
+  {which:'display',   key:'setDisp',  words:['display','brightness','liwanag','screen']},
+  {which:'sound',     key:'setSound', words:['sound','tunog','volume settings']},
+  {which:'battery',   key:'setBatt',  words:['battery','baterya']},
+  {which:'data',      key:'setData',  words:['mobile data','data']},
+  {which:'main',      key:'setMain',  words:['settings','setting','ayos ng telepono']}
+];
+
 var VOICE_OPEN = ['open','buksan','buksa','pakibuksan','punta','go to','pakibukas','bukas','ibukas'];
 
-/* ---------- launching another app ----------
-   Uses Capacitor's AppLauncher when it is installed, because it asks Android
-   whether the app is even there before trying, and can therefore say so out
-   loud instead of leaving the person staring at a screen that did nothing.
-
-   Without the plugin it falls back to setting location, which works for
-   some schemes and silently fails for others. Installing the plugin is what
-   makes this dependable:
-
-     npm install @capacitor/app-launcher
-     npx cap sync android
-
-   Android 11 and newer also hide other apps unless they are declared, so
-   android/app/src/main/AndroidManifest.xml needs a <queries> block listing
-   the schemes above. See docs/APPLINKS.md. */
-function appLauncher(){
+function tandaSys(){
   try{
-    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppLauncher){
-      return window.Capacitor.Plugins.AppLauncher;
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TandaSys){
+      return window.Capacitor.Plugins.TandaSys;
     }
   }catch(e){}
   return null;
 }
 
-/* Opens the app, or says plainly that it could not.
-
-   canOpenUrl is deliberately NOT used. Since Android 11 one app cannot ask
-   whether another exists without declaring it in the manifest, so that call
-   answers "no" for apps that are sitting right there on the phone. Actually
-   starting the app is not restricted in the same way, so the reliable move
-   is to try it and deal with the rejection. */
-function launchApp(app){
-  var AL = appLauncher();
-  var label = t(app.key);
-
-  try{ speakOne(t('openingApp', {app: label})); }catch(e){}
-
-  setTimeout(function(){
-    if(AL && AL.openUrl){
-      AL.openUrl({ url: app.url })
-        .then(function(res){
-          /* Some versions resolve with completed:false instead of rejecting. */
-          if(res && res.completed === false) webFallback(app, label);
-        })
-        .catch(function(){ webFallback(app, label); });
-      return;
-    }
-    /* No plugin: the only thing left is to navigate and hope Android takes
-       over. Nothing can be detected here, so no message is shown. */
-    try{ window.location.href = app.url; }catch(e){}
-  }, 900);
-}
-
-/* When the app itself will not open, the website is better than silence -
-   and better than a wrong claim that the app is missing. */
-function webFallback(app, label){
-  if(app.web){
-    var AL = appLauncher();
-    if(AL && AL.openUrl){ AL.openUrl({ url: app.web }).catch(function(){}); }
-    else { try{ window.location.href = app.web; }catch(e){} }
-    return;
-  }
-  var msg = t('appNoOpen', {app: label});
+function sysSay(msg){
   chat.push({role:'ai', text: msg});
   render();
   try{ speakOne(msg); }catch(e){}
+}
+
+/* Tries each package in turn. The first one on the phone is the one opened;
+   only when none of them is there does it fall back to a website, and only
+   when there is no website does it say so. */
+function launchApp(app){
+  var TS = tandaSys();
+  var label = t(app.key);
+
+  if(!TS){
+    if(app.web){ try{ window.location.href = app.web; }catch(e){} }
+    else sysSay(t('appNoOpen', {app: label}));
+    return;
+  }
+
+  try{ speakOne(t('openingApp', {app: label})); }catch(e){}
+
+  var i = 0;
+  function tryNext(){
+    if(i >= app.pkgs.length){
+      if(app.web){ try{ window.location.href = app.web; }catch(e){} }
+      else sysSay(t('appMissing', {app: label}));
+      return;
+    }
+    TS.openApp({ package: app.pkgs[i++] }).catch(function(){ tryNext(); });
+  }
+  setTimeout(tryNext, 900);
 }
 
 function runVoiceCommand(said){
@@ -467,28 +472,65 @@ function runVoiceCommand(said){
   if(!s) return false;
 
   var wantsOpen = VOICE_OPEN.some(function(w){ return s.indexOf(w) >= 0; });
+  var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
+                   || s.indexOf('?') >= 0;
 
+  /* ---- louder, softer, brighter, dimmer ---- */
+  var TS = tandaSys();
+  var up   = /\b(taas|lakas|palakasin|itaas|louder|up|increase|brighter|liwanag pa)\b/.test(s);
+  var down = /\b(baba|hina|pahinain|ibaba|softer|lower|down|decrease|dimmer)\b/.test(s);
+  var vol  = /\b(volume|tunog|lakas ng boses|boses|sound)\b/.test(s);
+  var bri  = /\b(brightness|liwanag|screen|ilaw)\b/.test(s);
+
+  if(TS && (up || down) && (vol || bri)){
+    if(vol){
+      TS.bumpVolume({ direction: up ? 1 : -1 })
+        .then(function(){ /* Android shows its own slider, so no message. */ })
+        .catch(function(){ sysSay(t('sysFailed')); });
+      return true;
+    }
+    /* Brightness has no system slider of its own here, so it says what it did. */
+    TS.setBrightness({ percent: up ? 100 : 25 }).then(function(res){
+      if(res && res.systemWide === false){
+        sysSay(t('brightAppOnly'));
+      }else{
+        try{ speakOne(t(up ? 'brightUp' : 'brightDown')); }catch(e){}
+      }
+    }).catch(function(){ sysSay(t('sysFailed')); });
+    return true;
+  }
+
+  /* ---- settings screens ---- */
+  if(TS && (wantsOpen || /\b(settings|setting)\b/.test(s)) && !isQuestion){
+    for(var k=0;k<VOICE_SETTINGS.length;k++){
+      var st = VOICE_SETTINGS[k];
+      if(st.words.some(function(w){ return s.indexOf(w) >= 0; })){
+        try{ speakOne(t('openingApp', {app: t(st.key)})); }catch(e){}
+        var which = st.which;
+        setTimeout(function(){
+          TS.openSettings({ which: which }).catch(function(){ sysSay(t('sysFailed')); });
+        }, 900);
+        return true;
+      }
+    }
+  }
+
+  /* ---- other apps ---- */
   for(var i=0;i<VOICE_APPS.length;i++){
     var app = VOICE_APPS[i];
-    var named = app.words.some(function(w){ return s.indexOf(w) >= 0; });
-    if(!named) continue;
-    /* Naming an app on its own is treated as a request to open it. Someone
-       who wants to be taught instead phrases it as a question, and those
-       words fall through to the AI. "Open Messenger" opens it; "paano mag
-       Messenger" gets the guide. */
-    var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
-                     || s.indexOf('?') >= 0;
+    if(!app.words.some(function(w){ return s.indexOf(w) >= 0; })) continue;
+    /* A question about an app is a request to be taught, not to be moved. */
     if(!wantsOpen && isQuestion) continue;
     launchApp(app);
     return true;
   }
 
-  /* In-app moves. Saying where you want to go should take you there. */
+  /* ---- moving around inside TANDA ---- */
   var goes = [
     {words:['games','laro','maglaro'], screen:'games'},
     {words:['learn','gabay','aral','tutorial'], screen:'learn'},
     {words:['home','bahay','simula'], screen:'home'},
-    {words:['settings','setting','ayos'], screen:'me'}
+    {words:['me','profile','sarili'], screen:'me'}
   ];
   if(wantsOpen || /^(pumunta|punta|go)\b/.test(s)){
     for(var g=0; g<goes.length; g++){
@@ -501,3 +543,4 @@ function runVoiceCommand(said){
   }
   return false;
 }
+
