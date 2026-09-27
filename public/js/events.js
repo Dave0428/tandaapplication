@@ -373,37 +373,83 @@ function bigReader(){
    Returns true when it handled the words, which tells the caller to stop.
    Every command speaks a short confirmation first, because the app is about
    to disappear from the screen and silence would look like a crash. */
+/* ---------- the apps TANDA can open ----------
+   Each entry is a deep link that Android hands to the installed app, plus
+   the words an older Filipino speaker is likely to say for it - including
+   the way the recognizer usually mangles them. */
 var VOICE_APPS = [
-  {scheme:'fb-messenger://', web:'https://www.messenger.com', key:'openMsg',
-   words:['messenger','mesenger','masinger','mesinger','mesencher']},
-  {scheme:'fb://facewebmodal/f?href=https://www.facebook.com/', web:'https://www.facebook.com', key:'openFB',
-   words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
-  {scheme:'vnd.youtube://', web:'https://www.youtube.com', key:'openYT',
-   words:['youtube','you tube','yutub','yutyub','yutyob']}
+  {url:'fb-messenger://',      key:'appMsg',    words:['messenger','mesenger','masinger','mesinger','mesencher','mesahe']},
+  {url:'fb://facewebmodal/f?href=https://www.facebook.com/', key:'appFB', words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
+  {url:'vnd.youtube://',       key:'appYT',     words:['youtube','you tube','yutub','yutyub','yutyob']},
+  {url:'gcash://',             key:'appGCash',  words:['gcash','g cash','jicash','gikash']},
+  {url:'viber://',             key:'appViber',  words:['viber','vayber','bayber']},
+  {url:'whatsapp://',          key:'appWA',     words:['whatsapp','watsap','wasap']},
+  {url:'googlegmail://',       key:'appGmail',  words:['gmail','email','imeyl','mail']},
+  {url:'geo:0,0?q=',           key:'appMaps',   words:['maps','google maps','mapa']},
+  {url:'tiktok://',            key:'appTikTok', words:['tiktok','tik tok','tiktak']},
+  {url:'shopeeph://',          key:'appShopee', words:['shopee','shope','sopi']},
+  {url:'lazada://',            key:'appLazada', words:['lazada','lasada']},
+  {url:'tel:',                 key:'appPhone',  words:['dialer','phone app','telepono','tumawag']},
+  {url:'https://www.google.com', key:'appGoogle', words:['google','gugol','chrome','browser']}
 ];
-var VOICE_OPEN = ['open','buksan','buksa','pakibuksan','punta','go to','pakibukas','bukas'];
+var VOICE_OPEN = ['open','buksan','buksa','pakibuksan','punta','go to','pakibukas','bukas','ibukas'];
 
 /* ---------- launching another app ----------
-   A plain https link lands in a browser, which is not what someone means
-   when they say "open Messenger". Android hands a custom scheme such as
-   fb-messenger:// straight to the installed app, so that is tried first.
+   Uses Capacitor's AppLauncher when it is installed, because it asks Android
+   whether the app is even there before trying, and can therefore say so out
+   loud instead of leaving the person staring at a screen that did nothing.
 
-   Nothing happens at all when the app is missing, and a phone that quietly
-   does nothing is indistinguishable from a broken one. So a timer is set:
-   if the page is still in front of us a moment later, the app never took
-   over and the website is opened instead. */
+   Without the plugin it falls back to setting location, which works for
+   some schemes and silently fails for others. Installing the plugin is what
+   makes this dependable:
+
+     npm install @capacitor/app-launcher
+     npx cap sync android
+
+   Android 11 and newer also hide other apps unless they are declared, so
+   android/app/src/main/AndroidManifest.xml needs a <queries> block listing
+   the schemes above. See docs/APPLINKS.md. */
+function appLauncher(){
+  try{
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AppLauncher){
+      return window.Capacitor.Plugins.AppLauncher;
+    }
+  }catch(e){}
+  return null;
+}
+
 function launchApp(app){
-  var left = false;
-  function onHide(){ if(document.hidden) left = true; }
-  document.addEventListener('visibilitychange', onHide);
+  var AL = appLauncher();
+  var label = t(app.key);
 
-  try{ window.location.href = app.scheme; }catch(e){}
+  if(AL && AL.canOpenUrl){
+    AL.canOpenUrl({ url: app.url }).then(function(res){
+      if(res && res.value){
+        try{ speakOne(t('openingApp', {app: label})); }catch(e){}
+        setTimeout(function(){ AL.openUrl({ url: app.url }); }, 900);
+      }else{
+        /* Saying so is the whole point. An older user who hears nothing
+           assumes they did it wrong. */
+        notInstalled(label);
+      }
+    }).catch(function(){ rawLaunch(app, label); });
+    return;
+  }
+  rawLaunch(app, label);
+}
 
+function rawLaunch(app, label){
+  try{ speakOne(t('openingApp', {app: label})); }catch(e){}
   setTimeout(function(){
-    document.removeEventListener('visibilitychange', onHide);
-    if(left || document.hidden) return;   /* the app opened; we are in the background */
-    try{ window.location.href = app.web; }catch(e){}
-  }, 1400);
+    try{ window.location.href = app.url; }catch(e){}
+  }, 900);
+}
+
+function notInstalled(label){
+  var msg = t('appMissing', {app: label});
+  chat.push({role:'ai', text: msg});
+  render();
+  try{ speakOne(msg); }catch(e){}
 }
 
 function runVoiceCommand(said){
@@ -423,10 +469,7 @@ function runVoiceCommand(said){
     var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
                      || s.indexOf('?') >= 0;
     if(!wantsOpen && isQuestion) continue;
-    try{ speakOne(t('openingApp', {app: t(app.key)})); }catch(e){}
-    /* The spoken line runs first. Leaving for another app mid-sentence
-       makes the phone look like it ignored them. */
-    setTimeout(function(a){ return function(){ launchApp(a); }; }(app), 1100);
+    launchApp(app);
     return true;
   }
 
