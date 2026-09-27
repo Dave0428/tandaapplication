@@ -9,7 +9,13 @@ shell.addEventListener('click', function(ev){
   if(a === 'lang'){ S.data.lang = arg; save(); stopSpeak(); if(S.game==='word'||S.game==='trivia') S.g={}; render(); return; }
   if(a === 'setname'){
     var v = (document.getElementById('nameIn')||{}).value || '';
-    S.data.name = v.trim() || t('friend'); save(); render(); return;
+    S.data.name = v.trim() || t('friend');
+    /* The walkthrough runs once, right after the name. Anyone who has
+       already seen it goes straight home. */
+    if(!S.data.tourDone){ S.tour = 0; S.screen = 'tour'; }
+    save(); render();
+    if(S.screen === 'tour') speakTourCard();
+    return;
   }
   if(a === 'savename'){
     var v2 = (document.getElementById('nameEdit')||{}).value || '';
@@ -82,6 +88,30 @@ shell.addEventListener('click', function(ev){
     });
     return;
   }
+  if(a === 'tournext'){
+    stopSpeak();
+    S.tour = (S.tour || 0) + 1;
+    if(S.tour >= TOUR.length){
+      S.data.tourDone = true; save();
+      S.screen = 'home'; S.tour = 0; render(); return;
+    }
+    render(); speakTourCard(); return;
+  }
+  if(a === 'tourprev'){
+    stopSpeak();
+    S.tour = Math.max(0, (S.tour || 0) - 1);
+    render(); speakTourCard(); return;
+  }
+  if(a === 'toursay'){ stopSpeak(); speakTourCard(true); return; }
+  if(a === 'tourskip'){
+    stopSpeak();
+    S.data.tourDone = true; save();
+    S.screen = 'home'; S.tour = 0; render(); return;
+  }
+  if(a === 'tourstart'){
+    stopSpeak();
+    S.tour = 0; S.screen = 'tour'; render(); speakTourCard(); return;
+  }
   if(a === 'voicecheck'){ warmUp(); runVoiceCheck(); return; }
   if(a === 'bigread'){ S.bigStep = 0; bigReader(); return; }
   if(a === 'bignext'){
@@ -97,20 +127,33 @@ shell.addEventListener('click', function(ev){
   if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
-  if(a === 'mic'){
+    if(a === 'mic'){
     if(!sttSupported()) return;
     var micBtn = el;
     if(isListening()){ stopListening(); return; }
     var ta = document.getElementById('askIn');
     var basePrefix = ta && ta.value ? ta.value + ' ' : '';
-    micBtn.textContent = '\u23FA\uFE0F';
+    micBtn.textContent = '⏺️';
+
+    // TEMPORARY debug banner so we can see exactly what the native plugin
+    // is doing without needing a connected computer. Remove once voice
+    // input is confirmed working.
+    var dbg = document.getElementById('micDebug');
+    if(!dbg){
+      dbg = document.createElement('div');
+      dbg.id = 'micDebug';
+      dbg.style.cssText = 'position:fixed;left:8px;right:8px;bottom:80px;z-index:9999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;max-height:40vh;overflow:auto;white-space:pre-wrap';
+      document.body.appendChild(dbg);
+    }
+    dbg.textContent = '';
+    function logDbg(line){ dbg.textContent += line + '\n\n'; dbg.scrollTop = dbg.scrollHeight; }
 
     // Short phrases sometimes get echoed twice by Android's own speech
     // engine before it settles ("check" -> "check check") — this is a
     // known quirk of the recognizer itself, not something the app is
     // doing. Collapse an exact A-A repeat into a single A before showing it.
     function dedupeRepeat(text){
-      var words = String(text).trim().split(/\s+/);
+      var words = text.trim().split(/\s+/);
       var n = words.length;
       if(n >= 2 && n % 2 === 0){
         var half = n / 2;
@@ -122,15 +165,10 @@ shell.addEventListener('click', function(ev){
     }
 
     startListening(function(liveText){
-      var box = document.getElementById('askIn') || ta;
-      if(box){
-        box.value = basePrefix + dedupeRepeat(liveText);
-        try{ box.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
-      }
+      if(ta) ta.value = basePrefix + dedupeRepeat(liveText);
     }, function(){
-      var mb = document.querySelector('[data-act="mic"]') || micBtn;
-      if(mb) mb.textContent = '\uD83C\uDFA4';
-    });
+      micBtn.textContent = '🎤';
+    }, logDbg);
     return;
   }
 
@@ -138,7 +176,7 @@ shell.addEventListener('click', function(ev){
   if(a === 'chip'){ sendAsk(t('suggest'+arg)); return; }
 
   if(a === 'game'){ S.game = arg; S.g = {}; S.screen='game'; S.modal=null;
-    if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath();
+    if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath(); if(arg==='blocks') initBlocks();
     render(); if(arg==='trivia') startTrivia(); return; }
   if(a === 'usefallback'){
     var flb = (FALLBACK_Q[S.data.lang] || FALLBACK_Q.en);
@@ -147,9 +185,13 @@ shell.addEventListener('click', function(ev){
     return;
   }
   if(a === 'replay'){ S.modal=null;
-    if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord();
+    if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord(); else if(S.game==='blocks') initBlocks();
     else if(S.game==='math') initMath(); else if(S.game==='trivia'){ startTrivia(); return; }
     render(); return; }
+  if(a === 'bleft'){ blockMove(-1); return; }
+  if(a === 'bright'){ blockMove(1); return; }
+  if(a === 'brot'){ blockRotate(); return; }
+  if(a === 'bdown'){ blockSlam(); return; }
   if(a === 'flip'){ flip(Number(arg)); return; }
   if(a === 'slide'){ slide(Number(arg)); return; }
   if(a === 'pick'){
@@ -166,24 +208,34 @@ shell.addEventListener('click', function(ev){
   if(a === 'checkword'){
     var guess = S.g.answer.map(function(p){return p.c;}).join('');
     if(guess === S.g.word){ winModal(S.g.word + ' ✓'); }
-    else { S.g.wrong = true; render(); }
+    else { S.g.wrong = true; soundWrong(); render(); }
     return;
   }
   if(a === 'math'){
-    if(S.g.q.picked !== null) return;
+    if(S.g.over || S.g.q.picked !== null) return;
     S.g.q.picked = Number(arg);
-    if(Number(arg) === S.g.q.ans) S.g.score++;
+    if(Number(arg) === S.g.q.ans){
+      S.g.score++; S.g.streak++;
+      soundRight();
+      /* Every few right answers the numbers get bigger. The level-up tone
+         is what tells the player it got harder, so a sudden difficult sum
+         does not feel like the app misbehaving. */
+      if(S.g.streak >= MATH_LEVEL_EVERY){ S.g.streak = 0; S.g.level++; soundLevel(); }
+    }else{
+      S.g.lives--;
+      soundWrong();
+    }
     render(); return;
   }
   if(a === 'nextmath'){
     S.g.n++;
-    if(S.g.n >= 10){ winModal(t('score')+': '+S.g.score+' / 10', S.g.score); return; }
+    if(S.g.lives <= 0){ mathOver(); return; }
     nextMath(); render(); return;
   }
   if(a === 'triv'){
     if(S.g.picked !== null) return;
     S.g.picked = Number(arg);
-    if(Number(arg) === Number(S.g.qs[S.g.i].a)) S.g.score++;
+    if(Number(arg) === Number(S.g.qs[S.g.i].a)){ S.g.score++; soundRight(); } else { soundWrong(); }
     render(); return;
   }
   if(a === 'nexttriv'){
