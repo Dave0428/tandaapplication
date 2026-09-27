@@ -127,48 +127,50 @@ shell.addEventListener('click', function(ev){
   if(a === 'sayq'){ var qq = S.g.qs[S.g.i]; if(qq) speakOne(qq.q + '. ' + qq.o.join('. ')); return; }
   if(a === 'simpler'){ tutorialAi('simpler'); return; }
   if(a === 'askabout'){ tutorialAi('questions'); return; }
-    if(a === 'mic'){
+  if(a === 'mic'){
     if(!sttSupported()) return;
     var micBtn = el;
     if(isListening()){ stopListening(); return; }
     var ta = document.getElementById('askIn');
     var basePrefix = ta && ta.value ? ta.value + ' ' : '';
-    micBtn.textContent = '⏺️';
-
-    // TEMPORARY debug banner so we can see exactly what the native plugin
-    // is doing without needing a connected computer. Remove once voice
-    // input is confirmed working.
-    var dbg = document.getElementById('micDebug');
-    if(!dbg){
-      dbg = document.createElement('div');
-      dbg.id = 'micDebug';
-      dbg.style.cssText = 'position:fixed;left:8px;right:8px;bottom:80px;z-index:9999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;max-height:40vh;overflow:auto;white-space:pre-wrap';
-      document.body.appendChild(dbg);
-    }
-    dbg.textContent = '';
-    function logDbg(line){ dbg.textContent += line + '\n\n'; dbg.scrollTop = dbg.scrollHeight; }
+    micBtn.textContent = '\u23FA\uFE0F';
 
     // Short phrases sometimes get echoed twice by Android's own speech
-    // engine before it settles ("check" -> "check check") — this is a
-    // known quirk of the recognizer itself, not something the app is
-    // doing. Collapse an exact A-A repeat into a single A before showing it.
+    // engine before it settles ("check" -> "check check") - a quirk of the
+    // recognizer, not of this app. Collapse an exact A-A repeat.
     function dedupeRepeat(text){
-      var words = text.trim().split(/\s+/);
+      var words = String(text).trim().split(/\s+/);
       var n = words.length;
       if(n >= 2 && n % 2 === 0){
         var half = n / 2;
-        var firstHalf = words.slice(0, half).join(' ').toLowerCase();
-        var secondHalf = words.slice(half).join(' ').toLowerCase();
-        if(firstHalf === secondHalf) return words.slice(0, half).join(' ');
+        var a1 = words.slice(0, half).join(' ').toLowerCase();
+        var a2 = words.slice(half).join(' ').toLowerCase();
+        if(a1 === a2) return words.slice(0, half).join(' ');
       }
       return text;
     }
 
     startListening(function(liveText){
-      if(ta) ta.value = basePrefix + dedupeRepeat(liveText);
+      var said = dedupeRepeat(liveText);
+
+      /* Spoken commands are handled here rather than sent to the AI. Asking
+         the model to open Messenger would cost a round trip and a wait, and
+         it would still only be able to answer in words. A command that the
+         phone can simply carry out should be carried out. */
+      if(runVoiceCommand(said)) return;
+
+      var box = document.getElementById('askIn') || ta;
+      if(box){
+        box.value = basePrefix + said;
+        try{ box.dispatchEvent(new Event('input', {bubbles:true})); }catch(e){}
+      }
+      /* Anything that is not a command is a question, so send it without
+         making the person find the arrow afterwards. */
+      if(box){ var q = box.value; box.value = ''; askedByVoice = true; sendAsk(q); }
     }, function(){
-      micBtn.textContent = '🎤';
-    }, logDbg);
+      var mb = document.querySelector('[data-act="mic"]') || micBtn;
+      if(mb) mb.textContent = '\uD83C\uDFA4';
+    });
     return;
   }
 
@@ -361,3 +363,63 @@ function bigReader(){
 }
 
       
+
+/* ---------- spoken commands ----------
+   A short list of things the phone can just do, checked before anything is
+   sent to the AI. Matching is deliberately loose: an older speaker rarely
+   says the exact phrase, and the recognizer mishears besides, so any
+   sentence that mentions opening and names an app counts.
+
+   Returns true when it handled the words, which tells the caller to stop.
+   Every command speaks a short confirmation first, because the app is about
+   to disappear from the screen and silence would look like a crash. */
+var VOICE_APPS = [
+  {scheme:'fb-messenger://', web:'https://www.messenger.com', key:'openMsg',
+   words:['messenger','mesenger','masinger','mesinger','mesencher']},
+  {scheme:'fb://facewebmodal/f?href=https://www.facebook.com/', web:'https://www.facebook.com', key:'openFB',
+   words:['facebook','fb','feysbuk','peysbuk','fesbuk']},
+  {scheme:'vnd.youtube://', web:'https://www.youtube.com', key:'openYT',
+   words:['youtube','you tube','yutub','yutyub','yutyob']}
+];
+var VOICE_OPEN = ['open','buksan','buksa','pakibuksan','punta','go to','pakibukas','bukas'];
+
+/* ---------- launching another app ----------
+   A plain https link lands in a browser, which is not what someone means
+   when they say "open Messenger". Android hands a custom scheme such as
+   fb-messenger:// straight to the installed app, so that is tried first.
+
+   Nothing happens at all when the app is missing, and a phone that quietly
+   does nothing is indistinguishable from a broken one. So a timer is set:
+   if the page is still in front of us a moment later, the app never took
+   over and the website is opened instead. */
+function launchApp(app){
+  var left = false;
+  function onHide(){ if(document.hidden) left = true; }
+  document.addEventListener('visibilitychange', onHide);
+
+  try{ window.location.href = app.scheme; }catch(e){}
+
+  setTimeout(function(){
+    document.removeEventListener('visibilitychange', onHide);
+    if(left || document.hidden) return;   /* the app opened; we are in the background */
+    try{ window.location.href = app.web; }catch(e){}
+  }, 1400);
+}
+
+function runVoiceCommand(said){
+  var s = String(said || '').toLowerCase().trim();
+  if(!s) return false;
+
+  var wantsOpen = VOICE_OPEN.some(function(w){ return s.indexOf(w) >= 0; });
+
+  for(var i=0;i<VOICE_APPS.length;i++){
+    var app = VOICE_APPS[i];
+    var named = app.words.some(function(w){ return s.indexOf(w) >= 0; });
+    if(!named) continue;
+    /* Naming an app on its own is treated as a request to open it. Someone
+       who wants to be taught instead phrases it as a question, and those
+       words fall through to the AI. "Open Messenger" opens it; "paano mag
+       Messenger" gets the guide. */
+    var isQuestion = /^\s*(ano|anong|paano|papaano|pano|how|what|bakit|why|saan|where)\b/.test(s)
+                     || s.indexOf('?') >= 0;
+    if(!wantsOpen && isQuesti
