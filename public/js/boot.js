@@ -6,6 +6,11 @@
   /* 1. paint immediately from localStorage — never wait for the network */
   render();
 
+  /* The greeting waits a moment so the voice engine has loaded and so it
+     does not talk over the app still drawing itself. */
+  if(S.data.name){ setTimeout(greetOnce, 1200); }
+  setTimeout(scheduleDailyNudge, 2500);
+
   /* 2. work out which AI engine (if any) we have, then re-check the buttons */
   TandaAI.init().then(function(){
     refreshAiBits();
@@ -59,4 +64,52 @@
     });
   }
 })();
-   
+
+/* ---------- the daily nudge ----------
+   One notification a morning. This is the single strongest thing an app can
+   do to bring someone back, and for an older user living alone it doubles as
+   a small piece of company. The time is early enough to catch the part of
+   the day when they are most alert, and there is only ever one - an app that
+   pesters gets uninstalled.
+
+   Scheduling is repeated on every launch because Android drops pending
+   notifications when the phone restarts. Re-using the same id means it
+   replaces the old one rather than stacking up. */
+function scheduleDailyNudge(){
+  var LN = null;
+  try{
+    if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications){
+      LN = window.Capacitor.Plugins.LocalNotifications;
+    }
+  }catch(e){}
+  if(!LN) return;
+
+  LN.requestPermissions().then(function(res){
+    if(res && res.display !== 'granted') return;
+    return LN.schedule({
+      notifications: [{
+        id: 1,
+        title: t('nudgeT', {n: S.data.name || t('friend')}),
+        body: t('nudgeB'),
+        schedule: { on: { hour: 9, minute: 0 }, allowWhileIdle: true },
+        smallIcon: 'ic_stat_icon_config_sample'
+      }]
+    });
+  }).catch(function(){});
+}
+
+/* ---------- greeting ----------
+   Said out loud the first time the app is opened each day, and only then.
+   Hearing your own name is what makes a screen feel less like a machine;
+   hearing it every time you tap Home would be irritating. */
+var greetedOn = null;
+function greetOnce(){
+  var today = new Date().toDateString();
+  if(greetedOn === today) return;
+  greetedOn = today;
+  var h = new Date().getHours();
+  var part = h < 11 ? 'greetMorning' : (h < 18 ? 'greetNoon' : 'greetEve');
+  var line = t(part, {n: S.data.name || t('friend')});
+  if(S.data.streak > 1) line += ' ' + t('greetStreak', {n: S.data.streak});
+  try{ warmUp(); speakOne(line); }catch(e){}
+}
