@@ -25,8 +25,34 @@ shell.addEventListener('click', function(ev){
   if(a === 'testvoice'){ setTimeout(updateVoiceUi, 2600); speakOne(S.data.lang==='tl' ? 'Kumusta '+(S.data.name||'kaibigan')+'. Ganito ang bilis ng boses ko.' : 'Hello '+(S.data.name||'friend')+'. This is how fast I will read to you.'); return; }
   if(a === 'cat'){ S.cat = arg; render(); return; }
   if(a === 'tut'){ stopSpeak(); S.tutorial = arg; S.screen='tutorial'; render(); return; }
+  if(a === 'certopen'){ S.modal = certHtml(arg); render(); return; }
+  if(a === 'certclose'){ S.modal = null; render(); return; }
+  if(a === 'certshare'){
+    var cshare = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) || null;
+    var line = t('certShareText', {n: S.data.name || t('friend'), a: doneCount(), b: TUT.length});
+    if(cshare){ cshare.share({ title: 'TANDA', text: line }).catch(function(){}); }
+    else sysSay(line);
+    return;
+  }
   if(a === 'markdone'){
-    S.data.done[S.tutorial] = !S.data.done[S.tutorial]; save(); render(); return;
+    S.data.done[S.tutorial] = !S.data.done[S.tutorial]; save();
+    /* Finishing the last guide in a category is the moment worth marking,
+       so the certificate appears by itself rather than waiting to be found
+       in a menu. */
+    var tx = tutById(S.tutorial);
+    if(tx && S.data.done[S.tutorial] && catIsDone(tx.cat)){
+      S.data.certs = S.data.certs || {};
+      if(!S.data.certs[tx.cat]){
+        S.data.certs[tx.cat] = new Date().toISOString();
+        save();
+        soundWin();
+        S.modal = certHtml(tx.cat);
+        render();
+        try{ speakOne(t('certBody', {cat: t((CATS.filter(function(c){return c.id===tx.cat;})[0]||{}).label)})); }catch(e){}
+        return;
+      }
+    }
+    render(); return;
   }
   if(a === 'say'){
     var x = tutById(S.tutorial); speakOne(L(x.steps[Number(arg)])); return;
