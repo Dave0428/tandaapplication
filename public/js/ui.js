@@ -303,6 +303,7 @@ function viewMe(){
       + '<span class="dot">\uD83D\uDC4B</span>'
       + '<div><h4>'+esc(t('tourAgain'))+'</h4><p>'+esc(t('tourAgainS'))+'</p></div>'
       + '<span class="chev">\u203A</span></button>'
+    + certShelfHtml()
     + badgeShelfHtml()
     + '<div class="card" style="margin-top:16px"><h4 style="font-family:\'Baloo 2\';margin:0 0 6px">'+esc(t('progress',{a:doneCount(), b:TUT.length}))+'</h4>'
       + '<p class="muted" style="margin:0">🔥 '+esc(t('streakT',{n:S.data.streak}))+'</p></div>'
@@ -412,4 +413,63 @@ function openAppBtn(g){
   return '<div style="height:8px"></div>'
     + '<a class="btn small ghost" style="width:auto;padding:10px 14px;display:inline-block;text-decoration:none" '
       + 'href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(t(a.key)) + '</a>';
+}
+
+/* ---------- certificate ----------
+   Finishing a whole category earns something with the person's own name on
+   it. Badges live inside the app and only they ever see them; a certificate
+   is made to be shown to the family, and for a Filipino senior that
+   recognition carries far more weight than a score.
+
+   It is drawn as a screen rather than a file so it works offline and can
+   simply be screenshotted, which is what most people will do anyway. */
+function catIsDone(catId){
+  var list = TUT.filter(function(x){ return x.cat === catId; });
+  return list.length > 0 && list.every(function(x){ return !!S.data.done[x.id]; });
+}
+function certHtml(catId){
+  var cat = CATS.filter(function(c){ return c.id === catId; })[0];
+  if(!cat) return '';
+  var when = new Date().toLocaleDateString(S.data.lang === 'tl' ? 'fil-PH' : 'en-US',
+             {year:'numeric', month:'long', day:'numeric'});
+  return '<div class="backdrop"><div class="modal" style="max-width:420px;padding:0;overflow:hidden">'
+    + '<div id="certCard" style="background:var(--bg);padding:26px 22px;text-align:center;'
+      + 'border:6px double var(--teal)">'
+      + '<p class="muted" style="margin:0;letter-spacing:.18em;font-size:.72rem">TANDA</p>'
+      + '<p style="margin:2px 0 14px;font-size:.78rem;color:var(--ink-soft)">' + esc(t('certTop')) + '</p>'
+      + '<div style="font-size:2.6rem;line-height:1.1">' + cat.icon + '</div>'
+      + '<h2 style="font-family:\'Baloo 2\';font-weight:800;margin:10px 0 4px;font-size:1.35rem">'
+        + esc(t('certTitle')) + '</h2>'
+      + '<p class="muted" style="margin:0 0 12px;font-size:.86rem">' + esc(t('certFor')) + '</p>'
+      + '<p style="font-family:\'Baloo 2\';font-weight:800;font-size:1.6rem;margin:0 0 4px;color:var(--teal)">'
+        + esc(S.data.name || t('friend')) + '</p>'
+      + '<div style="height:2px;background:var(--marigold);width:120px;margin:10px auto"></div>'
+      + '<p style="margin:0 0 4px;font-size:1.02rem">' + esc(t('certBody', {cat: t(cat.label)})) + '</p>'
+      + '<p class="muted" style="margin:10px 0 0;font-size:.8rem">' + esc(when) + '</p>'
+    + '</div>'
+    + '<div style="padding:14px">'
+      + '<button class="btn" data-act="certshare">' + esc(t('certShare')) + '</button>'
+      + '<div style="height:8px"></div>'
+      + '<button class="btn ghost" data-act="certclose">' + esc(t('close')) + '</button>'
+      + '<p class="muted" style="margin:10px 0 0;font-size:.78rem">' + esc(t('certHint')) + '</p>'
+    + '</div>'
+  + '</div></div>';
+}
+
+/* A certificate should not be a thing you see once and lose. Every one
+   earned stays reachable from the Me screen, which is also where someone
+   will look when they want to show it to a visiting grandchild. */
+function certShelfHtml(){
+  S.data.certs = S.data.certs || {};
+  var got = CATS.filter(function(c){ return !!S.data.certs[c.id]; });
+  if(!got.length) return '';
+  return '<div class="card" style="margin-top:16px">'
+    + '<h4 style="font-family:\'Baloo 2\';margin:0 0 8px">' + esc(t('certMine')) + '</h4>'
+    + got.map(function(c){
+        return '<button class="listitem" style="margin-bottom:8px" data-act="certopen" data-arg="' + c.id + '">'
+          + '<span class="dot">' + c.icon + '</span>'
+          + '<div><h4>' + esc(t(c.label)) + '</h4><p>' + esc(t('certTitle')) + '</p></div>'
+          + '<span class="chev">\u203A</span></button>';
+      }).join('')
+    + '</div>';
 }
