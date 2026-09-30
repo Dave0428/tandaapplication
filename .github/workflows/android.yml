@@ -75,6 +75,7 @@ jobs:
                 'com.android.dialer','com.google.android.GoogleCamera',
                 'com.android.camera','com.android.camera2','com.google.android.deskclock',
                 'com.android.settings','com.google.android.apps.photos','com.android.chrome',
+                'com.spotify.music','com.android.vending',
               ]
               block = '  <queries>\n'
               for p in packages:
@@ -88,6 +89,16 @@ jobs:
               block += '  </queries>\n'
               x = x.replace('</manifest>', block + '</manifest>')
               print('added queries')
+
+          if 'android:scheme="tanda"' not in x:
+              filt = ('        <intent-filter>\n'
+                      '          <action android:name="android.intent.action.VIEW" />\n'
+                      '          <category android:name="android.intent.category.DEFAULT" />\n'
+                      '          <category android:name="android.intent.category.BROWSABLE" />\n'
+                      '          <data android:scheme="tanda" />\n'
+                      '        </intent-filter>\n')
+              x = x.replace('</activity>', filt + '        </activity>', 1)
+              print('added tanda:// scheme')
 
           if 'WRITE_SETTINGS' not in x:
               x = x.replace('</manifest>',
