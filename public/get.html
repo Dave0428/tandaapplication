@@ -56,8 +56,14 @@
 </div>
 
 <script>
-/* Where the APK lives. Change this one line when a new version is released. */
-var APK_URL = 'https://github.com/Dave0428/tandaapplication/releases/download/v1.0/TANDA.apk';
+/* Where the APK lives.
+
+   "latest" rather than a version number, because a pinned version keeps
+   handing out the same old build no matter how many new ones are made -
+   which is exactly what happened with v1.0. GitHub redirects this to the
+   newest release, so the only thing that has to happen from now on is
+   attaching the file to a new release and naming it TANDA.apk. */
+var APK_URL = 'https://github.com/Dave0428/tandaapplication/releases/latest/download/TANDA.apk';
 document.getElementById('dl').href = APK_URL;
 
 /* Opening the app from a link.
@@ -86,6 +92,8 @@ document.getElementById('dl').href = APK_URL;
   setTimeout(function(){
     document.getElementById('opening').style.display = 'none';
     if(left || document.hidden) return;   /* the app took over */
+    /* Still here: no app on this phone. The buttons are already visible,
+       so nothing more is needed than to stop saying "opening". */
   }, 1600);
 })();
 </script>
