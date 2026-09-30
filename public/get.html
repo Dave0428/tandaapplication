@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="tl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TANDA — Laro at Gabay</title>
+<link rel="icon" href="icon.png">
+<style>
+  :root{
+    --bg:#FBF3E6; --surface:#FFFFFF; --ink:#2B2320; --ink-soft:#6B5D52;
+    --teal:#1D4B45; --marigold:#E8A33D; --line:rgba(43,35,32,.12);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:24px;
+  }
+  .card{width:100%; max-width:420px; text-align:center}
+  .logo{
+    width:82px; height:82px; border-radius:24px; background:var(--teal);
+    color:var(--marigold); display:flex; align-items:center; justify-content:center;
+    margin:0 auto 18px; font-size:2.2rem; font-weight:800;
+    box-shadow:0 8px 22px rgba(43,35,32,.18);
+  }
+  h1{margin:0 0 4px; font-size:2rem; color:var(--teal)}
+  .sub{margin:0 0 6px; color:var(--ink-soft); font-style:italic}
+  .lead{margin:18px 0 26px; font-size:1.06rem; line-height:1.6}
+  .btn{
+    display:block; width:100%; padding:18px; margin:0 0 12px;
+    border:none; border-radius:16px; font-size:1.08rem; font-weight:800;
+    background:var(--teal); color:var(--bg); text-decoration:none; cursor:pointer;
+  }
+  .btn.ghost{background:var(--surface); color:var(--teal); border:2px solid var(--teal)}
+  .hint{margin:18px 0 0; font-size:.86rem; color:var(--ink-soft); line-height:1.6}
+  #opening{display:none; margin:0 0 18px; font-weight:700; color:var(--teal)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">T</div>
+  <h1>TANDA</h1>
+  <p class="sub">Laro at Gabay</p>
+
+  <p class="lead">Tinuturuan ang mga senior citizen kung paano gamitin ang telepono,
+  Facebook, at Messenger &mdash; sa Tagalog at English, at gumagana kahit walang internet.</p>
+
+  <p id="opening">Binubuksan ang app&hellip;</p>
+
+  <a class="btn" id="dl" href="#">I-download ang app</a>
+  <a class="btn ghost" id="web" href="/">Subukan muna sa browser</a>
+
+  <p class="hint">Kung naka-install na ang TANDA sa teleponong ito, kusa itong bubukas.
+  Kung hindi, pindutin ang I-download.</p>
+</div>
+
+<script>
+/* Where the APK lives. Change this one line when a new version is released. */
+var APK_URL = 'https://github.com/Dave0428/tandaapplication/releases/download/v1.0/TANDA.apk';
+document.getElementById('dl').href = APK_URL;
+
+/* Opening the app from a link.
+
+   The page asks Android to hand the address to TANDA using the app's own
+   scheme. If the app is there, Android switches to it and this page is left
+   behind; if it is not, nothing at all happens, which from a visitor's side
+   is indistinguishable from a broken link.
+
+   So the page watches: a moment later, if it is still on screen, the app was
+   never there and the download button is what the visitor needs. This is why
+   the check is on visibility rather than on any error - a scheme that goes
+   nowhere reports nothing. */
+(function(){
+  var isAndroid = /android/i.test(navigator.userAgent);
+  if(!isAndroid) return;          /* on a computer there is nothing to open */
+
+  var left = false;
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) left = true;
+  });
+
+  document.getElementById('opening').style.display = 'block';
+  try{ window.location.href = 'tanda://open'; }catch(e){}
+
+  setTimeout(function(){
+    document.getElementById('opening').style.display = 'none';
+    if(left || document.hidden) return;   /* the app took over */
+  }, 1600);
+})();
+</script>
+</body>
+</html>
