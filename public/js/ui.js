@@ -84,6 +84,7 @@ var GAMES = [
   {id:'puzzle', icon:'🔢', tk:'puzT', sk:'puzS'},
   {id:'word', icon:'🔤', tk:'wordT', sk:'wordS'},
   {id:'math', icon:'➕', tk:'mathT', sk:'mathS'},
+  {id:'bingo', icon:'🎱', tk:'bingoT', sk:'bingoS'},
   {id:'blocks', icon:'🧱', tk:'blocksT', sk:'blocksS'}
 ];
 function viewGames(){
@@ -173,6 +174,11 @@ function viewAsk(){
     var g = m.guide;
     return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)
       + (m.pending ? '' : '<br><button class="say" data-act="sayai" data-arg="'+i+'">\uD83D\uDD0A </button>')
+      + (m.getApp && !m.pending
+          ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
+            + 'data-act="getapp" data-arg="' + esc(m.getApp) + '">'
+            + esc(t('getAppBtn', {app: m.getLabel || ''})) + '</button></div>'
+          : '')
       + (m.askPerm && !m.pending
           ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
             + 'data-act="grantbright">' + esc(t('grantBright')) + '</button></div>'
@@ -472,4 +478,84 @@ function certShelfHtml(){
           + '<span class="chev">\u203A</span></button>';
       }).join('')
     + '</div>';
+}
+
+/* ---------- the certificate as a picture ----------
+   Sharing a sentence of text is not the same as sharing a certificate. What
+   an older person wants to send their family is the thing itself, so it is
+   drawn onto a canvas here and shared as an image.
+
+   It is drawn rather than screenshotted so it comes out the same on every
+   phone, at a size worth looking at, and without the status bar and the
+   navigation buttons in it. */
+/* The share link points at a small page rather than the app's home, because
+   that page can do something a plain address cannot: hand off to TANDA when
+   the person receiving it already has the app, and offer the download when
+   they do not. */
+var APP_LINK = 'https://tanda-tzlu.onrender.com/get.html';
+
+function drawCertPng(catId){
+  var cat = CATS.filter(function(c){ return c.id === catId; })[0];
+  if(!cat) return null;
+
+  var W = 1000, H = 700;
+  var cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var x = cv.getContext('2d');
+
+  x.fillStyle = '#FBF3E6'; x.fillRect(0, 0, W, H);
+
+  x.strokeStyle = '#1D4B45'; x.lineWidth = 8;
+  x.strokeRect(26, 26, W-52, H-52);
+  x.lineWidth = 2;
+  x.strokeRect(44, 44, W-88, H-88);
+
+  x.textAlign = 'center';
+
+  x.fillStyle = '#6B5D52';
+  x.font = '600 22px system-ui, sans-serif';
+  x.fillText('T A N D A', W/2, 108);
+
+  x.font = '400 20px system-ui, sans-serif';
+  x.fillText(t('certTop'), W/2, 146);
+
+  x.fillStyle = '#1D4B45';
+  x.font = '800 46px system-ui, sans-serif';
+  x.fillText(t('certTitle'), W/2, 226);
+
+  x.fillStyle = '#6B5D52';
+  x.font = '400 22px system-ui, sans-serif';
+  x.fillText(t('certFor'), W/2, 280);
+
+  x.fillStyle = '#2B2320';
+  x.font = '800 62px system-ui, sans-serif';
+  x.fillText(S.data.name || t('friend'), W/2, 356);
+
+  x.fillStyle = '#E8A33D';
+  x.fillRect(W/2 - 140, 386, 280, 6);
+
+  x.fillStyle = '#2B2320';
+  x.font = '400 26px system-ui, sans-serif';
+  var line = t('certBody', {cat: t(cat.label)});
+  /* Wrapped by hand: a long category name in Tagalog runs past the border
+     otherwise, and canvas will not wrap for us. */
+  var words = line.split(' '), cur = '', yy = 448;
+  for(var i=0;i<words.length;i++){
+    var test = cur ? cur + ' ' + words[i] : words[i];
+    if(x.measureText(test).width > W - 200 && cur){
+      x.fillText(cur, W/2, yy); yy += 38; cur = words[i];
+    }else cur = test;
+  }
+  if(cur) x.fillText(cur, W/2, yy);
+
+  var when = new Date().toLocaleDateString(S.data.lang === 'tl' ? 'fil-PH' : 'en-US',
+             {year:'numeric', month:'long', day:'numeric'});
+  x.fillStyle = '#6B5D52';
+  x.font = '400 22px system-ui, sans-serif';
+  x.fillText(when, W/2, H - 120);
+
+  x.font = '400 19px system-ui, sans-serif';
+  x.fillText(APP_LINK.replace('https://', ''), W/2, H - 76);
+
+  return cv.toDataURL('image/png');
 }
