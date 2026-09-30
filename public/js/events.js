@@ -25,13 +25,11 @@ shell.addEventListener('click', function(ev){
   if(a === 'testvoice'){ setTimeout(updateVoiceUi, 2600); speakOne(S.data.lang==='tl' ? 'Kumusta '+(S.data.name||'kaibigan')+'. Ganito ang bilis ng boses ko.' : 'Hello '+(S.data.name||'friend')+'. This is how fast I will read to you.'); return; }
   if(a === 'cat'){ S.cat = arg; render(); return; }
   if(a === 'tut'){ stopSpeak(); S.tutorial = arg; S.screen='tutorial'; render(); return; }
-  if(a === 'certopen'){ S.modal = certHtml(arg); render(); return; }
+  if(a === 'getapp'){ openPlayStore(arg); return; }
+  if(a === 'certopen'){ S.modalCat = arg; S.modal = certHtml(arg); render(); return; }
   if(a === 'certclose'){ S.modal = null; render(); return; }
   if(a === 'certshare'){
-    var cshare = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share) || null;
-    var line = t('certShareText', {n: S.data.name || t('friend'), a: doneCount(), b: TUT.length});
-    if(cshare){ cshare.share({ title: 'TANDA', text: line }).catch(function(){}); }
-    else sysSay(line);
+    shareCertificate(S.modalCat || S.cat);
     return;
   }
   if(a === 'markdone'){
@@ -46,6 +44,7 @@ shell.addEventListener('click', function(ev){
         S.data.certs[tx.cat] = new Date().toISOString();
         save();
         soundWin();
+        S.modalCat = tx.cat;
         S.modal = certHtml(tx.cat);
         render();
         try{ speakOne(t('certBody', {cat: t((CATS.filter(function(c){return c.id===tx.cat;})[0]||{}).label)})); }catch(e){}
@@ -209,7 +208,7 @@ shell.addEventListener('click', function(ev){
   if(a === 'chip'){ sendAsk(t('suggest'+arg)); return; }
 
   if(a === 'game'){ S.game = arg; S.g = {}; S.screen='game'; S.modal=null;
-    if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath(); if(arg==='blocks') initBlocks();
+    if(arg==='match') initMatch(); if(arg==='puzzle') initPuzzle(); if(arg==='word') initWord(); if(arg==='math') initMath(); if(arg==='blocks') initBlocks(); if(arg==='bingo') initBingo();
     render(); if(arg==='trivia') startTrivia(); return; }
   if(a === 'usefallback'){
     var flb = (FALLBACK_Q[S.data.lang] || FALLBACK_Q.en);
@@ -218,9 +217,24 @@ shell.addEventListener('click', function(ev){
     return;
   }
   if(a === 'replay'){ S.modal=null;
-    if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord(); else if(S.game==='blocks') initBlocks();
+    if(S.game==='match') initMatch(); else if(S.game==='puzzle') initPuzzle(); else if(S.game==='word') initWord(); else if(S.game==='blocks') initBlocks(); else if(S.game==='bingo') initBingo();
     else if(S.game==='math') initMath(); else if(S.game==='trivia'){ startTrivia(); return; }
     render(); return; }
+  if(a === 'bingomark'){
+    var bp = String(arg).split(',');
+    bingoMark(Number(bp[0]), Number(bp[1]));
+    return;
+  }
+  if(a === 'bingonext'){ if(!S.g.over){ callBingo(); render(); } return; }
+  if(a === 'bingosay'){
+    if(S.g.current){
+      var bl = BINGO_COLS[Math.floor((S.g.current-1)/15)];
+      var sp = bl + ' ' + S.g.current;
+      if(S.g.current >= 10) sp += '. ' + String(S.g.current).split('').join(' ');
+      stopSpeak(); try{ speakOne(sp); }catch(e){}
+    }
+    return;
+  }
   if(a === 'bleft'){ blockMove(-1); return; }
   if(a === 'bright'){ blockMove(1); return; }
   if(a === 'brot'){ blockRotate(); return; }
@@ -490,8 +504,7 @@ function launchApp(app){
   var i = 0;
   function tryNext(){
     if(i >= app.pkgs.length){
-      if(app.web){ try{ window.location.href = app.web; }catch(e){} }
-      else sysSay(t('appMissing', {app: label}));
+      offerInstall(app.pkgs[0], label);
       return;
     }
     TS.openApp({ package: app.pkgs[i++] }).catch(function(){ tryNext(); });
@@ -578,7 +591,7 @@ function launchByPackage(pkg, label){
   if(!TS) return;
   try{ speakOne(t('openingApp', {app: label})); }catch(e){}
   setTimeout(function(){
-    TS.openApp({ package: pkg }).catch(function(){ sysSay(t('appNoOpen', {app: label})); });
+    TS.openApp({ package: pkg }).catch(function(){ offerInstall(pkg, label); });
   }, 900);
 }
 
@@ -617,6 +630,35 @@ function searchInApp(entry, query){
     }
     try{ window.location.href = url; }catch(e){}
   }, 1100);
+}
+
+
+/* ---------- when the app is not there ----------
+   Saying "you do not have Viber" is only half an answer. The person asked
+   for something and still cannot have it, so the offer to install comes
+   with the message.
+
+   market:// goes straight to the Play Store app when it is present. On a
+   phone without it - some units sold here ship without Play Services - the
+   https address opens the same page in a browser, so the suggestion is
+   never a dead end. */
+function offerInstall(pkg, label){
+  var msg = t('appMissingGet', {app: label});
+  chat.push({role:'ai', text: msg, getApp: pkg, getLabel: label});
+  render();
+  try{ speakOne(msg); }catch(e){}
+}
+
+function openPlayStore(pkg){
+  var TS = tandaSys();
+  var market = 'market://details?id=' + encodeURIComponent(pkg);
+  var web = 'https://play.google.com/store/apps/details?id=' + encodeURIComponent(pkg);
+  if(TS && TS.openUrl){
+    TS.openUrl({ url: market })
+      .catch(function(){ TS.openUrl({ url: web }).catch(function(){}); });
+    return;
+  }
+  try{ window.location.href = web; }catch(e){}
 }
 
 function runVoiceCommand(said){
@@ -735,3 +777,43 @@ function runVoiceCommand(said){
   return false;
 }
 
+/* ---------- sending the certificate to the family ----------
+   Three things go out together: the picture, a sentence the person can be
+   proud of, and a link so whoever receives it can find the app. A message
+   on its own gives the family nothing to look at, and nothing to install.
+
+   The picture is written to the cache folder first because Android will not
+   let one app hand another a raw image - it has to be a file with a proper
+   content URI, which is what Filesystem gives us. When either plugin is
+   missing the text still goes, so the button is never dead. */
+function shareCertificate(catId){
+  var P = (window.Capacitor && window.Capacitor.Plugins) || {};
+  var Share = P.Share, FS = P.Filesystem;
+
+  var line = t('certShareText', {n: S.data.name || t('friend'), a: doneCount(), b: TUT.length})
+           + '\n' + APP_LINK;
+
+  if(!Share){ sysSay(line); return; }
+
+  var data = null;
+  try{ data = drawCertPng(catId); }catch(e){}
+
+  if(!data || !FS){
+    Share.share({ title: 'TANDA', text: line, url: APP_LINK }).catch(function(){});
+    return;
+  }
+
+  var name = 'tanda-certificate-' + Date.now() + '.png';
+  FS.writeFile({
+    path: name,
+    data: data.split(',')[1],
+    directory: 'CACHE'
+  }).then(function(){
+    return FS.getUri({ path: name, directory: 'CACHE' });
+  }).then(function(res){
+    return Share.share({ title: 'TANDA', text: line, files: [res.uri] });
+  }).catch(function(){
+    /* Writing or sharing the file failed; the words and the link still go. */
+    Share.share({ title: 'TANDA', text: line, url: APP_LINK }).catch(function(){});
+  });
+}
