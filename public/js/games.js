@@ -7,6 +7,7 @@ function viewGame(){
   else if(S.game === 'math') body = gMath();
   else if(S.game === 'trivia') body = gTrivia();
   else if(S.game === 'blocks') body = gBlocks();
+  else if(S.game === 'bingo') body = gBingo();
   var titleKey = (GAMES.filter(function(g){return g.id===S.game;})[0]||{}).tk || 'games';
   return '<div class="scroll">' + head(t(titleKey), 'games') + body + '</div>';
 }
@@ -583,5 +584,170 @@ function gBlocks(){
       + '</div>'
       + '<p class="muted center" style="margin-top:10px;font-size:.85rem">'
         + esc(t('bestScore'))+': '+blocksBest()+'</p>'
+    + '</div>';
+}
+
+/* ---------- Bingo ----------
+   The one game on this list that most Filipino seniors already know. That
+   matters more than it sounds: every other game here has to be explained
+   first, and explaining is the part where older players give up. Nobody
+   needs to be taught bingo.
+
+   It is also the only game where losing is impossible to feel bad about,
+   since nothing depends on being quick or clever.
+
+   Two things are deliberately unlike a real bingo hall. There is no timer:
+   the next number comes when the player asks for it, because being hurried
+   is what makes an older person put the phone down. And the number is read
+   out loud the way a caller would, which is both how the game is meant to
+   sound and a help to anyone who cannot read the screen easily. */
+var BINGO_COLS = ['B','I','N','G','O'];
+
+function initBingo(){
+  var card = [], used = {};
+  for(var c=0;c<5;c++){
+    var lo = c*15 + 1, col = [];
+    while(col.length < 5){
+      var n = lo + Math.floor(Math.random()*15);
+      if(used[n]) continue;
+      used[n] = true; col.push(n);
+    }
+    card.push(col);
+  }
+  var marked = [];
+  for(var i=0;i<5;i++) marked.push([false,false,false,false,false]);
+  marked[2][2] = true;                 /* the free centre square */
+  S.g = {card:card, marked:marked, called:[], current:null, over:false, missed:0};
+  callBingo();
+}
+
+function callBingo(){
+  if(S.g.called.length >= 75){ S.g.current = null; return; }
+  var n;
+  do { n = 1 + Math.floor(Math.random()*75); } while(S.g.called.indexOf(n) >= 0);
+  S.g.called.push(n);
+  S.g.current = n;
+  /* Read out in the shape a caller uses - letter first, then the number,
+     then the digits on their own, because "fifty-two" and "fifteen-two"
+     are easy to mix up for someone who is hard of hearing. */
+  var letter = BINGO_COLS[Math.floor((n-1)/15)];
+  var spoken = letter + ' ' + n;
+  if(n >= 10) spoken += '. ' + String(n).split('').join(' ');
+  try{ warmUp(); speakOne(spoken); }catch(e){}
+}
+
+/* The number is on the card in the column its letter belongs to, so only
+   that column has to be searched. */
+function bingoFind(n){
+  var c = Math.floor((n-1)/15);
+  for(var r=0;r<5;r++) if(S.g.card[c][r] === n) return {c:c, r:r};
+  return null;
+}
+
+function bingoMark(c, r){
+  if(S.g.over) return;
+  if(S.g.marked[c][r]) return;
+  var n = S.g.card[c][r];
+  if(S.g.called.indexOf(n) < 0){
+    /* Not called yet. Nothing is taken away for this - a wrong tap in a
+       game meant to be relaxing should cost nothing but a small sound. */
+    soundWrong();
+    return;
+  }
+  S.g.marked[c][r] = true;
+  soundRight();
+  if(bingoWon()) bingoOver();
+  else render();
+}
+
+function bingoWon(){
+  var m = S.g.marked, i;
+  for(i=0;i<5;i++){
+    if(m[i][0]&&m[i][1]&&m[i][2]&&m[i][3]&&m[i][4]) return true;      /* column */
+    if(m[0][i]&&m[1][i]&&m[2][i]&&m[3][i]&&m[4][i]) return true;      /* row */
+  }
+  if(m[0][0]&&m[1][1]&&m[2][2]&&m[3][3]&&m[4][4]) return true;
+  if(m[0][4]&&m[1][3]&&m[2][2]&&m[3][1]&&m[4][0]) return true;
+  if(m[0][0]&&m[0][4]&&m[4][0]&&m[4][4]) return true;                  /* four corners */
+  return false;
+}
+
+function bingoBest(){ return (S.data.best && S.data.best.bingo) || 0; }
+
+function bingoOver(){
+  S.g.over = true;
+  S.data.best = S.data.best || {};
+  /* Fewer calls is a better round, so the best score is the lowest one. */
+  var calls = S.g.called.length;
+  var isBest = !S.data.best.bingo || calls < S.data.best.bingo;
+  if(isBest) S.data.best.bingo = calls;
+  S.data.plays = (S.data.plays||0)+1;
+  save();
+  soundWin();
+
+  var fresh = newBadges();
+  var badgeHtml = fresh.length
+    ? '<div class="card" style="margin:10px 0 0;text-align:center">'
+      + '<p class="muted" style="margin:0 0 6px;font-size:.85rem">'+esc(t('newBadge'))+'</p>'
+      + fresh.map(function(b){
+          return '<div style="font-size:2rem;line-height:1.1">'+b.icon+'</div>'
+            + '<p style="margin:0;font-weight:700">'+esc(t('badge_'+b.id))+'</p>';
+        }).join('')
+      + '</div>'
+    : '';
+
+  S.modal = '<div class="backdrop"><div class="modal"><div class="ic">\uD83C\uDF89</div>'
+    + '<h3>BINGO!</h3>'
+    + '<p style="font-weight:700;font-size:1.05rem;margin:0 0 4px">'
+      + esc(t('praise'+(1+Math.floor(Math.random()*3)), {n:S.data.name||t('friend')})) + '</p>'
+    + '<p class="muted" style="margin:6px 0 0">' + esc(t('bingoCalls', {n: calls})) + '</p>'
+    + (isBest ? '<p style="font-weight:700;color:var(--teal);margin:6px 0 0">'+esc(t('newBest'))+'</p>' : '')
+    + badgeHtml
+    + '<div style="height:12px"></div>'
+    + '<button class="btn" data-act="replay">'+esc(t('playAgain'))+'</button>'
+    + '<div style="height:9px"></div>'
+    + '<button class="btn ghost" data-act="go" data-arg="games">'+esc(t('quit'))+'</button></div></div>';
+
+  if(window.TandaAPI) TandaAPI.recordGame('bingo', calls, {});
+  render();
+  try{ speakOne('BINGO! ' + t('praise1', {n:S.data.name||t('friend')})); }catch(e){}
+}
+
+function gBingo(){
+  if(!S.g.card) initBingo();
+  var cur = S.g.current;
+  var letter = cur ? BINGO_COLS[Math.floor((cur-1)/15)] : '';
+
+  var head = '<div class="gwrap"><div class="card center" style="padding:14px">'
+    + '<p class="muted" style="margin:0;font-size:.82rem">' + esc(t('bingoCalled')) + '</p>'
+    + '<p style="font-family:\'Baloo 2\';font-weight:800;font-size:3rem;line-height:1.1;margin:4px 0;color:var(--teal)">'
+      + (cur ? letter + '-' + cur : '\u2014') + '</p>'
+    + '<button class="btn small ghost" style="width:auto;padding:8px 16px" data-act="bingosay">\uD83D\uDD0A '
+      + esc(t('listen')) + '</button>'
+    + '</div>';
+
+  var grid = '<div class="bingo-card">';
+  for(var h=0;h<5;h++) grid += '<div class="bingo-head">' + BINGO_COLS[h] + '</div>';
+  for(var r=0;r<5;r++){
+    for(var c=0;c<5;c++){
+      var free = (c===2 && r===2);
+      var on = S.g.marked[c][r];
+      grid += '<button class="bingo-cell' + (on ? ' on' : '') + '" data-act="bingomark" data-arg="'
+        + c + ',' + r + '">' + (free ? '\u2605' : S.g.card[c][r]) + '</button>';
+    }
+  }
+  grid += '</div>';
+
+  var recent = S.g.called.slice(-6).reverse().map(function(n){
+    return '<span class="bingo-past">' + BINGO_COLS[Math.floor((n-1)/15)] + n + '</span>';
+  }).join('');
+
+  return head + grid
+    + '<button class="btn" style="margin-top:14px" data-act="bingonext">' + esc(t('bingoNext')) + '</button>'
+    + '<p class="muted center" style="margin-top:12px;font-size:.82rem">' + esc(t('bingoRecent')) + '</p>'
+    + '<div class="center" style="margin-top:4px">' + recent + '</div>'
+    + '<p class="muted center" style="margin-top:10px;font-size:.82rem">'
+      + esc(t('bingoCallsSoFar', {n: S.g.called.length}))
+      + (bingoBest() ? ' \u00B7 ' + esc(t('bingoBest', {n: bingoBest()})) : '') + '</p>'
     + '</div>';
 }
