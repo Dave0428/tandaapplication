@@ -196,7 +196,8 @@ shell.addEventListener('click', function(ev){
       }
       /* Anything that is not a command is a question, so send it without
          making the person find the arrow afterwards. */
-      if(box){ var q = box.value; box.value = ''; askedByVoice = true; sendAsk(q); }
+      /* The command check already ran above, so it is skipped here. */
+      if(box){ var q = box.value; box.value = ''; askedByVoice = true; sendAsk(q, true); }
     }, function(){
       var mb = document.querySelector('[data-act="mic"]') || micBtn;
       if(mb) mb.textContent = '\uD83C\uDFA4';
@@ -661,6 +662,41 @@ function openPlayStore(pkg){
   try{ window.location.href = web; }catch(e){}
 }
 
+
+/* ---------- louder and softer ----------
+   Moves by a quarter of the range, then speaks one short line. The line is
+   spoken AFTER the change on purpose: the person hears it at the new volume,
+   which is the quickest possible proof that something happened.
+
+   When the level did not move although it was not at either end, the phone
+   is holding the volume fixed - usually a Bluetooth speaker or earphones in
+   charge - and the app says so rather than claiming success. */
+function changeVolumeBy(goUp, toMax){
+  var TS = tandaSys();
+  if(!TS) return;
+  TS.changeVolume({ deltaPercent: goUp ? 25 : -25, max: !!toMax }).then(function(res){
+    if(!res) return;
+    if(res.after === res.before){
+      if(goUp && res.before >= res.max) sysSay(t('volAtMax'));
+      else if(!goUp && res.before <= 0) sysSay(t('volAtMin'));
+      else sysSay(t('volFixed'));
+      return;
+    }
+    var pct = Math.round(100 * res.after / res.max);
+    try{ speakOne(t(goUp ? 'volUp' : 'volDown', {n: pct})); }catch(e){}
+  }).catch(function(){
+    /* An older build of the app has no changeVolume. Three single steps of
+       the old call get close to the same result. */
+    var n = 0;
+    (function step(){
+      if(n++ >= 3) return;
+      TS.bumpVolume({ direction: goUp ? 1 : -1 }).then(step).catch(function(){
+        if(n === 1) sysSay(t('sysFailed'));
+      });
+    })();
+  });
+}
+
 function runVoiceCommand(said){
   var s = String(said || '').toLowerCase().trim();
   if(!s) return false;
@@ -693,8 +729,9 @@ function runVoiceCommand(said){
     var goUp = up || !down;
 
     if(vol){
-      TS.bumpVolume({ direction: goUp ? 1 : -1 })
-        .catch(function(){ sysSay(t('sysFailed')); });
+      /* "Loudest" and "full" mean the top of the range, not one more step. */
+      var toMax = goUp && hasAny(['pinaka','max','full','sagad','todo']);
+      changeVolumeBy(goUp, toMax);
       return true;
     }
     TS.setBrightness({ percent: goUp ? 100 : 25 }).then(function(res){
@@ -753,7 +790,7 @@ function runVoiceCommand(said){
     loadDeviceApps().then(function(apps){
       var hit = matchDeviceApp(s, apps);
       if(hit) launchByPackage(hit['package'], hit.label);
-      else sendAsk(said);   /* genuinely unknown - let the AI answer */
+      else sendAsk(said, true);   /* genuinely unknown - let the AI answer */
     });
     return true;
   }
