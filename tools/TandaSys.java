@@ -178,6 +178,48 @@ public class TandaSys extends Plugin {
         }
     }
 
+    /** Moves the media volume by a percentage of its range and reports what
+     *  actually happened.
+     *
+     *  Nudging by a single step is what the first version did, and on a
+     *  phone with about fifteen steps that is under 7 percent, which nobody
+     *  hears. This moves by a quarter of the range by default.
+     *
+     *  It also reports the level before and after. If nothing moved although
+     *  the volume was not at either end, the phone is holding the volume
+     *  fixed - typical when a Bluetooth speaker or a cast device is in
+     *  charge - and the caller can say so instead of pretending it worked. */
+    @PluginMethod
+    public void changeVolume(PluginCall call) {
+        int delta = call.getInt("deltaPercent", 25);
+        boolean toMax = Boolean.TRUE.equals(call.getBoolean("max", false));
+        try {
+            AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+            int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+            int step = Math.max(1, Math.round(max * Math.abs(delta) / 100f));
+            int want;
+            if (toMax) want = max;
+            else if (delta >= 0) want = Math.min(max, cur + step);
+            else want = Math.max(0, cur - step);
+
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, want, AudioManager.FLAG_SHOW_UI);
+            int after = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+
+            boolean fixed = false;
+            try { fixed = am.isVolumeFixed(); } catch (Exception ignored) {}
+
+            JSObject ret = new JSObject();
+            ret.put("before", cur);
+            ret.put("after", after);
+            ret.put("max", max);
+            ret.put("fixed", fixed);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("failed: " + e.getMessage());
+        }
+    }
+
     /** Screen brightness, 0 to 100.
      *
      *  Changing it for the whole phone needs a permission that the user has
