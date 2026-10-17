@@ -174,6 +174,16 @@ function viewAsk(){
     var g = m.guide;
     return '<div class="bub ai" id="bub'+i+'">'+esc(m.text)
       + (m.pending ? '' : '<br><button class="say" data-act="sayai" data-arg="'+i+'">\uD83D\uDD0A </button>')
+      + (m.choices && !m.pending
+          ? '<div style="margin-top:10px">' + m.choices.map(function(c, k){
+              return '<button class="btn small ghost" style="width:auto;margin:0 6px 6px 0;padding:10px 14px" '
+                + 'data-act="pickapp" data-arg="' + i + ':' + k + '">' + esc(c.label) + '</button>';
+            }).join('') + '</div>'
+          : '')
+      + (m.findQuery && !m.pending
+          ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
+            + 'data-act="getsearch" data-arg="' + esc(m.findQuery) + '">' + esc(t('findInStore')) + '</button></div>'
+          : '')
       + (m.getApp && !m.pending
           ? '<div style="margin-top:10px"><button class="btn small" style="width:auto;padding:10px 14px" '
             + 'data-act="getapp" data-arg="' + esc(m.getApp) + '">'
@@ -211,10 +221,24 @@ function viewAsk(){
 }
 function scrollChat(){ var c = document.getElementById('chatBox'); if(c) c.scrollTop = c.scrollHeight; }
 
-function sendAsk(text){
+/* skipCmd stops a message from being checked for commands a second time.
+   Without it the "no app by that name" path, which falls back to asking the
+   AI, would hand the same words straight back here and loop forever. */
+function sendAsk(text, skipCmd){
   if(!text || !text.trim()) return;
-  if(!aiReady()) return;
-  chat.push({role:'me', text:text.trim()});
+  var msg = text.trim();
+  chat.push({role:'me', text:msg});
+
+  /* Typing "open YouTube" means exactly what saying it means. Commands used
+     to be checked only on the microphone path, so the same words typed went
+     to the AI, which could only describe how to open YouTube rather than
+     open it. */
+  if(!skipCmd && typeof runVoiceCommand === 'function' && runVoiceCommand(msg)){
+    render();
+    return;
+  }
+
+  if(!aiReady()){ render(); return; }
   chat.push({role:'ai', text:t('thinking'), pending:true});
   render();
   var turns = [{role:'user', content:aiRules()}];
