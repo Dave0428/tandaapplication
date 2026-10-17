@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.provider.Settings;
 
 import java.util.List;
@@ -14,8 +15,11 @@ import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 /**
  * The parts of the phone that a web page cannot reach.
@@ -28,7 +32,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * the repository, because the android/ folder is generated fresh on every
  * run and anything committed there would be thrown away.
  */
-@CapacitorPlugin(name = "TandaSys")
+@CapacitorPlugin(
+    name = "TandaSys",
+    permissions = {
+        @Permission(strings = { "android.permission.BLUETOOTH_CONNECT" }, alias = "btconnect")
+    }
+)
 public class TandaSys extends Plugin {
 
     /** Launches an installed app by package name. Far more dependable than a
@@ -215,6 +224,71 @@ public class TandaSys extends Plugin {
             ret.put("max", max);
             ret.put("fixed", fixed);
             call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("failed: " + e.getMessage());
+        }
+    }
+
+
+    /** Asks Android to turn Bluetooth on. The phone shows its own "Allow
+     *  TANDA to turn on Bluetooth?" box and the person taps Allow - an app
+     *  cannot switch Bluetooth on silently, and cannot switch it off at all.
+     *
+     *  From Android 12 the request itself needs the Bluetooth permission,
+     *  which is asked for the first time this is used. If that is refused
+     *  the call is rejected and the caller falls back to the settings page. */
+    @PluginMethod
+    public void enableBluetooth(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 31 && getPermissionState("btconnect") != PermissionState.GRANTED) {
+            requestPermissionForAlias("btconnect", call, "btPermCallback");
+            return;
+        }
+        doEnableBluetooth(call);
+    }
+
+    @PermissionCallback
+    private void btPermCallback(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 31 && getPermissionState("btconnect") != PermissionState.GRANTED) {
+            call.reject("permission denied");
+            return;
+        }
+        doEnableBluetooth(call);
+    }
+
+    private void doEnableBluetooth(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            android.bluetooth.BluetoothManager bm =
+                (android.bluetooth.BluetoothManager) getContext().getSystemService(Context.BLUETOOTH_SERVICE);
+            android.bluetooth.BluetoothAdapter ad = (bm == null) ? null : bm.getAdapter();
+            if (ad == null) { call.reject("no bluetooth"); return; }
+            if (ad.isEnabled()) {
+                ret.put("state", "already");
+                call.resolve(ret);
+                return;
+            }
+            Intent i = new Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            ret.put("state", "asked");
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("failed: " + e.getMessage());
+        }
+    }
+
+    /** Opens the small WiFi and mobile-data panel that Android 10 and newer
+     *  slide up over the current app. The switches are right there, so the
+     *  person taps once without ever leaving TANDA. It is the only way an
+     *  app can get someone to the WiFi switch quickly. */
+    @PluginMethod
+    public void openPanel(PluginCall call) {
+        if (Build.VERSION.SDK_INT < 29) { call.reject("panel needs Android 10"); return; }
+        try {
+            Intent i = new Intent("android.settings.panel.action.INTERNET_CONNECTIVITY");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            call.resolve();
         } catch (Exception e) {
             call.reject("failed: " + e.getMessage());
         }
