@@ -85,12 +85,12 @@ jobs:
               block += ('    <intent><action android:name="android.intent.action.VIEW" />'
                         '<data android:scheme="tel" /></intent>\n')
               block += ('    <intent><action android:name="android.intent.action.MAIN" />'
-                        '</intent>\n')
+                        '<category android:name="android.intent.category.LAUNCHER" /></intent>\n')
               block += '  </queries>\n'
               x = x.replace('</manifest>', block + '</manifest>')
               print('added queries')
 
-          if 'android:scheme="tanda"' not in x:
+          if 'tanda://' not in x and 'android:scheme="tanda"' not in x:
               filt = ('        <intent-filter>\n'
                       '          <action android:name="android.intent.action.VIEW" />\n'
                       '          <category android:name="android.intent.category.DEFAULT" />\n'
@@ -99,6 +99,21 @@ jobs:
                       '        </intent-filter>\n')
               x = x.replace('</activity>', filt + '        </activity>', 1)
               print('added tanda:// scheme')
+
+          if 'QUERY_ALL_PACKAGES' not in x:
+              x = x.replace('</manifest>',
+                '  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" '
+                'tools:ignore="QueryAllPackagesPermission" />\n</manifest>')
+              if 'xmlns:tools' not in x:
+                  x = x.replace('<manifest ', '<manifest xmlns:tools="http://schemas.android.com/tools" ', 1)
+              print('added QUERY_ALL_PACKAGES')
+
+          if 'BLUETOOTH_CONNECT' not in x:
+              x = x.replace('</manifest>',
+                '  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n'
+                '  <uses-permission android:name="android.permission.BLUETOOTH" '
+                'android:maxSdkVersion="30" />\n</manifest>')
+              print('added Bluetooth permissions')
 
           if 'WRITE_SETTINGS' not in x:
               x = x.replace('</manifest>',
