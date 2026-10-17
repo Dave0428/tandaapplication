@@ -26,6 +26,14 @@ shell.addEventListener('click', function(ev){
   if(a === 'cat'){ S.cat = arg; render(); return; }
   if(a === 'tut'){ stopSpeak(); S.tutorial = arg; S.screen='tutorial'; render(); return; }
   if(a === 'getapp'){ openPlayStore(arg); return; }
+  if(a === 'getsearch'){ openPlayStoreSearch(arg); return; }
+  if(a === 'pickapp'){
+    var pp = String(arg).split(':');
+    var pm = chat[Number(pp[0])];
+    var pc = pm && pm.choices && pm.choices[Number(pp[1])];
+    if(pc) launchByPackage(pc.pkg, pc.label);
+    return;
+  }
   if(a === 'certopen'){ S.modalCat = arg; S.modal = certHtml(arg); render(); return; }
   if(a === 'certclose'){ S.modal = null; render(); return; }
   if(a === 'certshare'){
@@ -440,7 +448,7 @@ var VOICE_APPS = [
   {pkgs:['com.whatsapp'], key:'appWA', words:['whatsapp','watsap','wasap']},
   {pkgs:['com.google.android.gm'], key:'appGmail', words:['gmail','email','imeyl']},
   {pkgs:['com.google.android.apps.maps'], key:'appMaps', words:['maps','google maps','mapa']},
-  {pkgs:['com.zhiliaoapp.musically'], web:'https://www.tiktok.com', key:'appTikTok',
+  {pkgs:['com.ss.android.ugc.trill','com.zhiliaoapp.musically','com.zhiliaoapp.musically.go'], web:'https://www.tiktok.com', key:'appTikTok',
    words:['tiktok','tik tok','tiktak']},
   {pkgs:['com.shopee.ph'], web:'https://shopee.ph', key:'appShopee', words:['shopee','shope','sopi']},
   {pkgs:['com.lazada.android'], web:'https://www.lazada.com.ph', key:'appLazada', words:['lazada','lasada']},
@@ -504,11 +512,27 @@ function launchApp(app){
 
   var i = 0;
   function tryNext(){
-    if(i >= app.pkgs.length){
-      offerInstall(app.pkgs[0], label);
-      return;
-    }
+    if(i >= app.pkgs.length){ viaInstalledList(); return; }
     TS.openApp({ package: app.pkgs[i++] }).catch(function(){ tryNext(); });
+  }
+
+  /* The package names written above are the ones I know about, and the same
+     app is published under different names in different regions - TikTok in
+     Asia is not the TikTok of Europe. So before saying the app is missing,
+     look at what is actually on this phone and match by the name on its
+     icon. Only when that also finds nothing is the install offered. */
+  function viaInstalledList(){
+    loadDeviceApps().then(function(apps){
+      for(var w=0; w<app.words.length; w++){
+        var r = matchDeviceApp(app.words[w], apps);
+        if(r.best){
+          TS.openApp({ package: r.best['package'] })
+            .catch(function(){ offerInstall(app.pkgs[0], label); });
+          return;
+        }
+      }
+      offerInstall(app.pkgs[0], label);
+    });
   }
   setTimeout(tryNext, 900);
 }
@@ -561,30 +585,93 @@ function loadDeviceApps(){
 
 function norm(x){ return String(x || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); }
 
-/* Finds the installed app whose visible name best fits what was said.
-   Longer names win, so "Google Play Store" is preferred over "Google" when
-   both could fit - the longer match used more of the sentence and is
-   therefore the more specific reading. */
+/* Words that carry the command rather than the name of the app. */
+var CMD_WORDS = VOICE_OPEN.concat(STRIP_WORDS, PLAY_WORDS, ['app','application','please','pakiusap']);
+
+/* Two words count as the same when they are equal or one begins with the
+   other ("legend" for "legends"), but only for words long enough that a
+   shared beginning means something. */
+function tokMatch(a, b){
+  if(a === b) return true;
+  if(a.length >= 4 && b.length >= 4) return a.indexOf(b) === 0 || b.indexOf(a) === 0;
+  return false;
+}
+
+/* Finds the installed app that fits what was said - or says honestly that it
+   cannot tell.
+
+   Every word of the request has to be found in the app's name. That is what
+   keeps "Mobile Legends" from landing on "Mobile Cloner": the name of the
+   game is Mobile Legends: Bang Bang, and only that one contains both words.
+   The earlier rule accepted any app whose FIRST word appeared, which turned
+   a request for one app into a launch of another.
+
+   Returns {best, near}: best when one app is clearly meant, otherwise near
+   holds up to three candidates so the person can choose. A wrong app opening
+   is worse than a question, especially for someone who may not realise
+   what happened. */
+/* What people actually call these apps. The name on the icon is long and
+   formal; nobody says "Mobile Legends: Bang Bang" out loud. */
+var APP_NICKNAMES = { mlbb:'mobile legends', ml:'mobile legends', emelbibi:'mobile legends',
+                      ig:'instagram', insta:'instagram', yt:'youtube' };
+
 function matchDeviceApp(said, apps){
-  var s = ' ' + norm(said) + ' ';
-  var best = null, bestLen = 0;
+  var want = norm(said).split(' ').filter(function(w){ return w && CMD_WORDS.indexOf(w) < 0; });
+  want = want.join(' ').split(' ').map(function(w){ return APP_NICKNAMES[w] || w; }).join(' ').split(' ').filter(Boolean);
+  if(!want.length) return {best:null, near:[], want:''};
+
+  var scored = [];
   for(var i=0;i<apps.length;i++){
-    var label = norm(apps[i].label);
-    if(label.length < 3) continue;
-    if(s.indexOf(' ' + label + ' ') >= 0 && label.length > bestLen){
-      best = apps[i]; bestLen = label.length;
+    var lt = norm(apps[i].label).split(' ').filter(Boolean);
+    if(!lt.length) continue;
+    var hit = 0;
+    for(var w=0; w<want.length; w++){
+      for(var k=0;k<lt.length;k++){ if(tokMatch(want[w], lt[k])){ hit++; break; } }
     }
+    if(!hit) continue;
+    scored.push({app:apps[i], cover:hit/want.length, extra:lt.length-hit, len:lt.length});
   }
-  if(best) return best;
-  /* Nothing matched whole. Try the first word of each name, which covers
-     "open Exness" when the icon reads "Exness Trade". */
-  for(var j=0;j<apps.length;j++){
-    var first = norm(apps[j].label).split(' ')[0];
-    if(first.length >= 4 && s.indexOf(' ' + first + ' ') >= 0 && first.length > bestLen){
-      best = apps[j]; bestLen = first.length;
-    }
+  scored.sort(function(x,y){ return (y.cover-x.cover) || (x.extra-y.extra) || (x.len-y.len); });
+
+  var full = scored.filter(function(x){ return x.cover === 1; });
+  var top = scored[0];
+  /* One clear answer: everything said is in the name, and either it is the
+     only such app or its name is exactly what was said. */
+  if(top && top.cover === 1 && (top.extra === 0 || full.length === 1)){
+    return {best:top.app, near:[], want:want.join(' ')};
   }
-  return best;
+  return {best:null, near:scored.slice(0,3).map(function(x){ return x.app; }), want:want.join(' ')};
+}
+
+/* Several apps fit, or none fits exactly: put the candidates in front of the
+   person instead of guessing. */
+function askWhich(list){
+  chat.push({role:'ai', text:t('appAsk'),
+             choices:list.map(function(a){ return {label:a.label, pkg:a['package']}; })});
+  render();
+  try{ speakOne(t('appAsk')); }catch(e){}
+}
+
+/* Nothing on the phone resembles the request: offer to look in the Play
+   Store, where it is most likely to be found. */
+function offerSearch(what){
+  var msg = t('appNotFound', {what: what});
+  chat.push({role:'ai', text:msg, findQuery:what});
+  render();
+  try{ speakOne(msg); }catch(e){}
+}
+
+function openPlayStoreSearch(q){
+  var TS = tandaSys();
+  var enc = encodeURIComponent(q);
+  var market = 'market://search?q=' + enc + '&c=apps';
+  var web = 'https://play.google.com/store/search?q=' + enc + '&c=apps';
+  if(TS && TS.openUrl){
+    TS.openUrl({ url: market })
+      .catch(function(){ TS.openUrl({ url: web }).catch(function(){}); });
+    return;
+  }
+  try{ window.location.href = web; }catch(e){}
 }
 
 function launchByPackage(pkg, label){
@@ -697,6 +784,59 @@ function changeVolumeBy(goUp, toMax){
   });
 }
 
+
+/* ---------- Bluetooth, WiFi and mobile data ----------
+   Android does not let an ordinary app flip these switches, and that is
+   deliberate: an app that could turn off the connection could also be used
+   to cut a person off or to follow them around. So the app does the most
+   that is allowed and says plainly what is left for the person to do.
+
+     Bluetooth on   the phone's own "Allow?" box appears; one tap on Allow.
+     Bluetooth off  not permitted at all, so the page is opened instead.
+     WiFi / data    a small panel slides up over TANDA with the switches.
+
+   Every path ends with something being said out loud, because a screen that
+   changes without a word is how someone decides they did it wrong. */
+function openSettingsLater(which, delay){
+  var TS = tandaSys();
+  if(!TS) return;
+  setTimeout(function(){
+    TS.openSettings({ which: which }).catch(function(){ sysSay(t('sysFailed')); });
+  }, delay || 1200);
+}
+
+function bluetoothOn(){
+  var TS = tandaSys();
+  TS.enableBluetooth().then(function(res){
+    if(res && res.state === 'already'){
+      sysSay(t('btAlready'));
+      openSettingsLater('bluetooth', 2200);   /* handy if they want to connect something */
+    }else{
+      sysSay(t('btAsk'));
+    }
+  }).catch(function(){
+    /* Permission refused, or an older build of the app that does not know
+       this call yet: the settings page is what the app did before. */
+    sysSay(t('btManual'));
+    openSettingsLater('bluetooth', 2200);
+  });
+}
+
+function bluetoothOff(){
+  sysSay(t('btOffNo'));
+  openSettingsLater('bluetooth', 3200);
+}
+
+function openInternetPanel(msgKey, fallbackWhich){
+  var TS = tandaSys();
+  sysSay(t(msgKey));
+  setTimeout(function(){
+    TS.openPanel().catch(function(){
+      TS.openSettings({ which: fallbackWhich }).catch(function(){});
+    });
+  }, 1800);
+}
+
 function runVoiceCommand(said){
   var s = String(said || '').toLowerCase().trim();
   if(!s) return false;
@@ -716,7 +856,7 @@ function runVoiceCommand(said){
 
   var UP   = ['taas','lakas','palakas','itaas','angat','laki','dagdag','bright','louder',
               'increase','higher','up '];
-  var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim','down'];
+  var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim'];
   var VOL  = ['volume','tunog','boses','sound','audio'];
   var BRI  = ['liwanag','bright','ilaw','screen','dilim','dim'];
 
@@ -743,6 +883,26 @@ function runVoiceCommand(said){
         try{ speakOne(t(goUp ? 'brightUp' : 'brightDown')); }catch(e){}
       }
     }).catch(function(){ sysSay(t('sysFailed')); });
+    return true;
+  }
+
+  /* ---- Bluetooth, WiFi and mobile data ----
+     Saying "settings" still goes to the settings page below; this is for
+     "open Bluetooth", "turn off WiFi" and the like. */
+  var isBT   = hasAny(['bluetooth','blutut','bluetut']);
+  var isWifi = hasAny(['wifi','wi-fi','wi fi','waypay','wayfay']);
+  var isData = hasAny(['mobile data','cellular','data connection']);
+  var saidSettings = /\bsettings?\b/.test(s);
+  if(TS && !isQuestion && !saidSettings && (isBT || isWifi || isData)){
+    var wantsOff = /\b(off|ioff)\b/.test(s) || s.indexOf('i-off') >= 0
+                   || hasAny(['patay','isara','tanggal']);
+    if(isBT){
+      if(wantsOff) bluetoothOff(); else bluetoothOn();
+    }else if(isWifi){
+      openInternetPanel('wifiPanel', 'wifi');
+    }else{
+      openInternetPanel('dataPanel', 'data');
+    }
     return true;
   }
 
@@ -788,9 +948,11 @@ function runVoiceCommand(said){
      work without anyone having thought of Exness. */
   if(tandaSys() && (wantsOpen || wantsPlay) && !isQuestion){
     loadDeviceApps().then(function(apps){
-      var hit = matchDeviceApp(s, apps);
-      if(hit) launchByPackage(hit['package'], hit.label);
-      else sendAsk(said, true);   /* genuinely unknown - let the AI answer */
+      var r = matchDeviceApp(s, apps);
+      if(r.best) launchByPackage(r.best['package'], r.best.label);
+      else if(r.near.length) askWhich(r.near);
+      else if(r.want) offerSearch(r.want);
+      else sendAsk(said, true);   /* no name in it at all - let the AI answer */
     });
     return true;
   }
