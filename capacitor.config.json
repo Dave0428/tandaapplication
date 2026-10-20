@@ -4,7 +4,10 @@
   "webDir": "public",
   "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://tanda-tzlu.onrender.com",
+    "cleartext": false,
+    "errorPath": "index.html"
   },
   "plugins": {
     "SplashScreen": {
