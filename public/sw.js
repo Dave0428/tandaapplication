@@ -1,7 +1,7 @@
 /* TANDA service worker — makes the app open with no internet.
    IMPORTANT when you ship an update: change CACHE below (v2, v3...).
    The browser only replaces old files when this string changes. */
-var CACHE = 'tanda-v5';
+var CACHE = 'tanda-v6';
 var FILES = [
   '.', 'index.html', 'css/styles.css', 'manifest.json',
   'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'favicon.ico', 'favicon-32.png',
@@ -29,9 +29,22 @@ self.addEventListener('fetch', function(e){
      trying to download. Let the browser fetch these directly. */
   if(url.pathname.indexOf('/api/') === 0) return;
   if(url.pathname.slice(-4).toLowerCase() === '.apk') return;
+  if(e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then(function(hit){
-      return hit || fetch(e.request).catch(function(){ return caches.match('index.html'); });
+      if(hit) return hit;
+      return fetch(e.request).then(function(res){
+        /* Tutorial pictures are not in the list above because there are
+           dozens and the list would have to be kept in step by hand. Instead
+           each one is kept the first time it is seen. When the app loads
+           from the server this is what lets a picture that was already
+           viewed still show with no signal. */
+        if(res && res.ok && url.origin === self.location.origin && url.pathname.indexOf('/img/') === 0){
+          var copy = res.clone();
+          caches.open(CACHE).then(function(c){ c.put(e.request, copy); });
+        }
+        return res;
+      }).catch(function(){ return caches.match('index.html'); });
     })
   );
 });
