@@ -12,7 +12,7 @@ var TUT = [
  title:['Make a phone call','Tumawag sa telepono'],
  sub:['Dial a number and talk','I-dial ang numero at makipag-usap'],
  steps:[
-  ['Find the Phone app on your home screen and tap it once.','Hanapin ang berdeng Phone app sa home screen at pindutin ito nang isang beses.'],
+  ['Find the Phone app on your home screen and tap it once.','Hanapin ang Phone app sa home screen at pindutin ito nang isang beses.'],
   ['Tap "Keypad" at the bottom to show the number buttons.','Pindutin ang "Keypad" sa ibaba para lumabas ang mga numero.'],
   ['Type the number slowly. Read it on the screen to be sure it is right.','Dahan-dahang i-type ang numero. Basahin ito sa screen para siguradong tama.'],
   ['Tap the big green call button.','Pindutin ang malaking berdeng call button.'],
