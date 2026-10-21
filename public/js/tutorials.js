@@ -9,7 +9,7 @@ var CATS = [
 var TUT = [
 /* ---------------- PHONE BASICS ---------------- */
 {id:'call', cat:'phone', icon:'📞',
- title:['Make a phone call','Tumawag sa telepono'],
+ title:['Make a phone call that bitch','Tumawag sa telepono'],
  sub:['Dial a number and talk','I-dial ang numero at makipag-usap'],
  steps:[
   ['Find the Phone app on your home screen and tap it once.','Hanapin ang Phone app sa home screen at pindutin ito nang isang beses.'],
