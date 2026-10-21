@@ -4,7 +4,7 @@
    Does not intentionally clear saved app data.
 */
 
-var CACHE = 'tanda-v10';
+var CACHE = 'tanda-v11';
 
 var FILES = [
   './',
