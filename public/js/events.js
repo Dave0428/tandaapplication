@@ -856,9 +856,9 @@ function runVoiceCommand(said){
 
   var UP   = ['taas','lakas','palakas','itaas','angat','laki','dagdag','bright','louder',
               'increase','higher','up '];
-  var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim'];
+  var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim','down'];
   var VOL  = ['volume','tunog','boses','sound','audio'];
-  var BRI  = ['liwanag','bright','ilaw','screen','dilim','dim'];
+  var BRI  = ['liwanag','bright','ilaw','screen','dilim','dim','brightness'];
 
   var up = hasAny(UP), down = hasAny(DOWN);
   var vol = hasAny(VOL), bri = hasAny(BRI);
