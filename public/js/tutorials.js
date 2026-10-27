@@ -15,7 +15,7 @@ var TUT = [
   ['Find the Phone App on your home screen and tap it once.','Hanapin ang Phone Application sa home screen at pindutin ito nang isang beses.'],
   ['Tap "Keypad" at the bottom to show the number buttons.','Pindutin ang "Keypad" sa ibaba para lumabas ang mga numero.'],
   ['Type the number slowly. Read it on the screen to be sure it is right.','Dahan-dahang i-type ang numero. Basahin ito sa screen para siguradong tama.'],
-  ['Tap the big green call button.','Pindutin ang malaking berdeng call button.'],
+  ['Tap the Big green call button.','Pindutin ang malaking berdeng call button.'],
   ['Put the phone near your ear and speak in a normal voice.','Ilapit ang telepono sa tainga at magsalita nang normal.'],
   ['When you are finished, tap the red button to end the call.','Kapag tapos na, pindutin ang pulang button para tapusin ang tawag.']],
  tip:['If you cannot hear well, press the volume button on the side upward while you are on the call.','Kung hindi mo marinig nang maayos, pindutin pataas ang volume button sa gilid habang tumatawag.']},
