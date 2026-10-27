@@ -13,7 +13,7 @@
    all. That gives both things this app needs: a new commit shows up the next
    time the app opens with a signal, and with no signal it still opens. */
 
-var CACHE = 'tanda-v16';
+var CACHE = 'tanda-v17';
 var WAIT_MS = 3000;   /* how long to wait for the server before using the saved copy */
 var FILES = [
   '.', 'index.html', 'css/styles.css', 'manifest.json',
