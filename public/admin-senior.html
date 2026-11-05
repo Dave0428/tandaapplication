@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TANDA Admin: Contacts, Services, Appointments</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#FBF3E6;--surface:#fff;--ink:#2B2320;--soft:#6B5D52;--teal:#1D4B45;--marigold:#E8A33D;--red:#D9614F;--line:rgba(43,35,32,.12);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Atkinson Hyperlegible',sans-serif;padding:20px}
+h1,h2{font-family:'Baloo 2',sans-serif;margin:0 0 10px}
+h2{font-size:1.2rem;margin-top:18px}
+.wrap{max-width:760px;margin:0 auto}
+.card{background:var(--surface);border-radius:14px;padding:16px;box-shadow:0 3px 0 0 var(--line);margin-bottom:14px}
+input,select,textarea{width:100%;padding:11px 12px;border-radius:10px;border:2px solid var(--line);font-family:inherit;font-size:1rem;margin-bottom:8px;background:#fff}
+button{font-family:inherit;border:none;border-radius:10px;padding:9px 14px;background:var(--teal);color:#fff;font-weight:700;cursor:pointer;font-size:.95rem}
+button.ghost{background:none;border:2px solid var(--teal);color:var(--teal)}
+button.danger{background:var(--red)}
+button.mini{padding:5px 9px;font-size:.8rem}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--soft);font-size:.78rem}
+.muted{color:var(--soft);font-size:.85rem}
+.err{color:var(--red);font-weight:700;font-size:.9rem}
+.hidden{display:none}
+.tag{background:rgba(29,75,69,.1);color:var(--teal);border-radius:999px;padding:2px 8px;font-size:.75rem;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+<a href="admin.html" style="color:var(--teal);font-weight:700">← Admin dashboard</a>
+
+<div id="login" class="card hidden" style="max-width:340px;margin:40px auto">
+  <h1>Mag-sign in</h1>
+  <input id="email" type="email" placeholder="Email" autocomplete="email">
+  <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn" style="width:100%">Mag-sign in</button>
+  <p id="loginErr" class="err"></p>
+</div>
+
+<div id="app" class="hidden">
+  <h1>Admin: Senior Features</h1>
+  <div class="tabs">
+    <button class="ghost" data-tab="contacts">Emergency contacts</button>
+    <button class="ghost" data-tab="services">Serbisyo</button>
+    <button class="ghost" data-tab="appts">Appointments</button>
+    <button class="ghost" id="out">Mag-sign out</button>
+  </div>
+
+  <section id="tab-contacts" class="hidden">
+    <div class="card">
+      <h2>Emergency contacts ng user</h2>
+      <input id="cUser" type="number" placeholder="User ID (tingnan sa admin dashboard)">
+      <button id="cLoad" class="ghost">I-load</button>
+    </div>
+    <div class="card">
+      <h2>Idagdag</h2>
+      <input id="cName" placeholder="Pangalan">
+      <input id="cPhone" placeholder="Mobile (09171234567)">
+      <input id="cRel" placeholder="Relasyon (anak, kapitbahay, atbp.)">
+      <button id="cAdd">Idagdag</button>
+      <p id="cErr" class="err"></p>
+    </div>
+    <div class="card" id="cList"></div>
+  </section>
+
+  <section id="tab-services" class="hidden">
+    <div class="card">
+      <h2>Bagong serbisyo</h2>
+      <input id="sName" placeholder="Pangalan ng serbisyo">
+      <input id="sCat" placeholder="Kategorya (ospital, barangay, pulis, atbp.)">
+      <input id="sPhone" placeholder="Telepono">
+      <input id="sAddr" placeholder="Address">
+      <input id="sHours" placeholder="Oras (hal. 8AM-5PM)">
+      <button id="sAdd">Idagdag</button>
+      <p id="sErr" class="err"></p>
+    </div>
+    <div class="card" id="sList"></div>
+  </section>
+
+  <section id="tab-appts" class="hidden">
+    <div class="card">
+      <h2>Bagong appointment</h2>
+      <input id="aUser" type="number" placeholder="User ID">
+      <input id="aTitle" placeholder="Pamagat (hal. Check-up sa health center)">
+      <input id="aWhen" type="datetime-local">
+      <input id="aNotes" placeholder="Notes (opsyonal)">
+      <button id="aAdd">Idagdag</button>
+      <p id="aErr" class="err"></p>
+    </div>
+    <div class="card">
+      <h2>Listahan</h2>
+      <div class="muted" style="margin-bottom:8px">Mula at hanggang (lilipat ng 30 araw kung walang nakalagay)</div>
+      <input id="fFrom" type="date">
+      <input id="fTo" type="date">
+      <button id="fLoad" class="ghost">I-load</button>
+    </div>
+    <div class="card" id="aList"></div>
+  </section>
+</div>
+
+</div>
+<script>
+var API = window.TANDA_ADMIN_API_BASE || 'https://tanda-tzlu.onrender.com';
+var TOKEN = localStorage.getItem('tanda.admin.token');
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function fmt(iso){ try{ return new Date(iso).toLocaleString('en-PH', {timeZone:'Asia/Manila'}); }catch(e){ return iso; } }
+
+async function api(path, opts){
+  opts = opts || {};
+  var r = await fetch(API + '/api/admin' + path, {
+    method: opts.method || 'GET',
+    headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + TOKEN},
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  var d = await r.json().catch(function(){ return {}; });
+  if(r.status === 401 || r.status === 403){ signOut(); throw new Error('Kailangan mag-sign in ulit.'); }
+  if(!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+function signOut(){
+  TOKEN = null; localStorage.removeItem('tanda.admin.token');
+  $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+}
+
+function showTab(t){
+  ['contacts','services','appts'].forEach(function(x){
+    $('tab-' + x).classList.toggle('hidden', x !== t);
+  });
+  if(t === 'services') loadServices();
+  if(t === 'appts') loadAppts();
+}
+
+/* ---- login ---- */
+$('loginBtn').onclick = function(){
+  $('loginErr').textContent = '';
+  fetch(API + '/api/auth/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({email: $('email').value, password: $('pass').value})
+  }).then(function(r){ return r.json().then(function(d){ if(!r.ok) throw new Error(d.error || 'mali'); return d; }); })
+  .then(function(d){
+    TOKEN = d.token; localStorage.setItem('tanda.admin.token', TOKEN);
+    start();
+  }).catch(function(e){ $('loginErr').textContent = 'Hindi nag-login: ' + e.message; });
+};
+$('out').onclick = signOut;
+document.querySelectorAll('[data-tab]').forEach(function(b){
+  b.onclick = function(){ showTab(b.getAttribute('data-tab')); };
+});
+
+function start(){
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  showTab('contacts');
+}
+
+/* ---- contacts ---- */
+function loadContacts(){
+  var uid = $('cUser').value;
+  if(!uid) return;
+  api('/contacts/' + uid).then(function(d){
+    if(!d.rows.length){ $('cList').innerHTML = '<p class="muted">Wala pang contacts ang user na ito.</p>'; return; }
+    $('cList').innerHTML = '<table><tr><th>Pangalan</th><th>Mobile</th><th>Relasyon</th><th></th></tr>'
+      + d.rows.map(function(c){
+        return '<tr><td>' + esc(c.name) + '</td><td>' + esc(c.phone) + '</td><td>' + esc(c.relationship) + '</td>'
+          + '<td><button class="mini danger" onclick="delContact(' + c.id + ')">Burahin</button></td></tr>';
+      }).join('') + '</table>';
+  }).catch(function(e){ $('cErr').textContent = e.message; });
+}
+$('cLoad').onclick = loadContacts;
+$('cAdd').onclick = function(){
+  $('cErr').textContent = '';
+  api('/contacts', {method:'POST', body:{
+    user_id: $('cUser').value, name: $('cName').value,
+    phone: $('cPhone').value, relationship: $('cRel').value
+  }}).then(function(){
+    $('cName').value = ''; $('cPhone').value = ''; $('cRel').value = '';
+    loadContacts();
+  }).catch(function(e){ $('cErr').textContent = e.message; });
+};
+window.delContact = function(id){
+  if(!confirm('Burahin ang contact na ito?')) return;
+  api('/contacts/' + id, {method:'DELETE'}).then(loadContacts).catch(function(e){ alert(e.message); });
+};
+
+/* ---- services ---- */
+function loadServices(){
+  api('/services').then(function(d){
+    if(!d.rows.length){ $('sList').innerHTML = '<p class="muted">Wala pang serbisyo.</p>'; return; }
+    $('sList').innerHTML = '<table><tr><th>Serbisyo</th><th>Telepono</th><th>Oras</th><th>Status</th><th></th></tr>'
+      + d.rows.map(function(s){
+        var next = s.status === 'active' ? 'inactive' : 'active';
+        return '<tr><td>' + esc(s.name) + '<div class="muted">' + esc(s.category) + ' ' + esc(s.address) + '</div></td>'
+          + '<td>' + esc(s.phone) + '</td><td>' + esc(s.hours) + '</td>'
+          + '<td><span class="tag">' + esc(s.status) + '</span></td>'
+          + '<td><button class="mini ghost" onclick="toggleService(' + s.id + ',\'' + next + '\')">' + (s.status === 'active' ? 'Itago' : 'Ipakita') + '</button> '
+          + '<button class="mini danger" onclick="delService(' + s.id + ')">Burahin</button></td></tr>';
+      }).join('') + '</table>';
+  }).catch(function(e){ $('sErr').textContent = e.message; });
+}
+$('sAdd').onclick = function(){
+  $('sErr').textContent = '';
+  api('/services', {method:'POST', body:{
+    name: $('sName').value, category: $('sCat').value, phone: $('sPhone').value,
+    address: $('sAddr').value, hours: $('sHours').value
+  }}).then(function(){
+    ['sName','sCat','sPhone','sAddr','sHours'].forEach(function(i){ $(i).value = ''; });
+    loadServices();
+  }).catch(function(e){ $('sErr').textContent = e.message; });
+};
+window.toggleService = function(id, status){
+  api('/services/' + id, {method:'PATCH', body:{status: status}}).then(loadServices).catch(function(e){ alert(e.message); });
+};
+window.delService = function(id){
+  if(!confirm('Burahin ang serbisyong ito?')) return;
+  api('/services/' + id, {method:'DELETE'}).then(loadServices).catch(function(e){ alert(e.message); });
+};
+
+/* ---- appointments ---- */
+function loadAppts(){
+  var from = $('fFrom').value ? new Date($('fFrom').value).toISOString() : '';
+  var to = $('fTo').value ? new Date($('fTo').value + 'T23:59:59').toISOString() : '';
+  var q = [];
+  if(from) q.push('from=' + encodeURIComponent(from));
+  if(to) q.push('to=' + encodeURIComponent(to));
+  api('/appointments' + (q.length ? '?' + q.join('&') : '')).then(function(d){
+    if(!d.rows.length){ $('aList').innerHTML = '<p class="muted">Walang appointment sa napiling petsa.</p>'; return; }
+    $('aList').innerHTML = '<table><tr><th>Kailan</th><th>User</th><th>Pamagat</th><th>Status</th><th></th></tr>'
+      + d.rows.map(function(a){
+        return '<tr><td>' + esc(fmt(a.starts_at)) + '</td>'
+          + '<td>' + esc(a.user_name || a.user_email) + '</td>'
+          + '<td>' + esc(a.title) + (a.notes ? '<div class="muted">' + esc(a.notes) + '</div>' : '') + '</td>'
+          + '<td><span class="tag">' + esc(a.status) + '</span></td>'
+          + '<td>'
+          + '<button class="mini ghost" onclick="setAppt(' + a.id + ',\'done\')">Tapos</button> '
+          + '<button class="mini ghost" onclick="setAppt(' + a.id + ',\'missed\')">Hindi sumipot</button> '
+          + '<button class="mini danger" onclick="setAppt(' + a.id + ',\'cancelled\')">Kanselado</button>'
+          + '</td></tr>';
+      }).join('') + '</table>';
+  }).catch(function(e){ $('aErr').textContent = e.message; });
+}
+$('fLoad').onclick = loadAppts;
+$('aAdd').onclick = function(){
+  $('aErr').textContent = '';
+  if(!$('aWhen').value) { $('aErr').textContent = 'Piliin ang petsa at oras.'; return; }
+  api('/appointments', {method:'POST', body:{
+    user_id: $('aUser').value, title: $('aTitle').value,
+    starts_at: new Date($('aWhen').value).toISOString(), notes: $('aNotes').value
+  }}).then(function(){
+    $('aTitle').value = ''; $('aNotes').value = '';
+    loadAppts();
+  }).catch(function(e){ $('aErr').textContent = e.message; });
+};
+window.setAppt = function(id, status){
+  api('/appointments/' + id, {method:'PATCH', body:{status: status}}).then(loadAppts).catch(function(e){ alert(e.message); });
+};
+
+/* ---- start ---- */
+if(TOKEN){ start(); } else { $('login').classList.remove('hidden'); }
+</script>
+</body>
+</html>
