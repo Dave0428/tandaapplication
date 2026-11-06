@@ -265,6 +265,33 @@ window.setAppt = function(id, status){
   api('/appointments/' + id, {method:'PATCH', body:{status: status}}).then(loadAppts).catch(function(e){ alert(e.message); });
 };
 
+/* ---- user list + statistics ---- */
+function renderStats(d){
+  var t = d.totals;
+  var cards = [['Mga user', t.users], ['Aktibo ngayong linggo', t.activeThisWeek], ['Natapos na gabay', t.tutorialsDone], ['Nalarong laro', t.gamesPlayed]];
+  $('statsBox').innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + cards.map(function(p){
+      return '<div class="card" style="flex:1;min-width:120px;margin:0"><div style="font-size:1.8rem;font-weight:800">' + p[1] + '</div><div class="muted">' + p[0] + '</div></div>';
+    }).join('') + '</div>'
+    + '<h3 style="margin-top:14px">Aling gabay ang natatapos</h3>'
+    + (d.perTutorial.length
+      ? '<table>' + d.perTutorial.map(function(r){ return '<tr><td>' + esc(r.tutorial_id) + '</td><td>' + r.finishers + '</td></tr>'; }).join('') + '</table>'
+      : '<p class="muted">Wala pang datos.</p>');
+}
+window.delUser = function(id){
+  if(!confirm('Burahin ang user na ito pati progreso niya? Hindi na maibabalik.')) return;
+  api('/admin/user/' + id, {method:'DELETE'}).then(function(){ $('uLoad').click(); }).catch(function(e){ alert(e.message); });
+};
+$('uLoad').onclick = function(){
+  api('/stats').then(function(d){
+    renderStats(d);
+    $('uList').innerHTML = '<table><tr><th>ID</th><th>Pangalan</th><th>Email</th><th></th></tr>'
+      + d.users.map(function(u){
+        return '<tr><td><b>' + u.id + '</b></td><td>' + esc(u.name) + '</td><td class="muted">' + esc(u.email) + '</td>'
+          + '<td><button class="mini danger" onclick="delUser(' + u.id + ')">Burahin</button></td></tr>';
+      }).join('') + '</table>';
+  }).catch(function(e){ alert(e.message); });
+};
 /* ---- start ---- */
 if(TOKEN){ start(); } else { $('login').classList.remove('hidden'); }
 </script>
