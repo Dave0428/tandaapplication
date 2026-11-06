@@ -13,13 +13,13 @@
    all. That gives both things this app needs: a new commit shows up the next
    time the app opens with a signal, and with no signal it still opens. */
 
-var CACHE = 'tanda-v19';
+var CACHE = 'tanda-v20';
 var WAIT_MS = 3000;   /* how long to wait for the server before using the saved copy */
 var FILES = [
   '.', 'index.html', 'css/styles.css', 'manifest.json',
   'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'favicon.ico', 'favicon-32.png',
   'js/api.js','js/state.js','js/i18n.js','js/tutorials.js','js/voice.js',
-  'js/ai.js','js/ai-glue.js','js/ui.js','js/games.js','js/events.js','js/boot.js'
+  'js/ai.js','js/ai-glue.js','js/ui.js','js/reminder.js','js/games.js','js/events.js','js/boot.js'
 ];
 
 self.addEventListener('install', function(e){
