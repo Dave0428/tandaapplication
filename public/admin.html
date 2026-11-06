@@ -92,7 +92,6 @@ function signOut(){
   show('dash', false); show('loginView', true);
 }
 
-/* ---- login ---- */
 document.getElementById('loginBtn').onclick = function(){
   var err = document.getElementById('loginErr');
   err.textContent = '';
@@ -122,7 +121,6 @@ document.getElementById('loginBtn').onclick = function(){
 document.getElementById('out').onclick = signOut;
 document.getElementById('refresh').onclick = function(){ load(); };
 
-/* ---- dashboard ---- */
 function load(){
   if(!TOKEN){ show('loginView', true); show('dash', false); return; }
   api('/admin/stats').then(function(d){
@@ -185,7 +183,6 @@ function draw(d){
 }
 function kpi(n, label){ return '<div class="kpi"><div class="n">' + n + '</div><div class="l">' + label + '</div></div>'; }
 
-/* ---- one user ---- */
 document.addEventListener('click', function(e){
   var v = e.target.getAttribute && e.target.getAttribute('data-view');
   var del = e.target.getAttribute && e.target.getAttribute('data-del');
@@ -214,7 +211,6 @@ document.addEventListener('click', function(e){
   }
 });
 
-/* ---- CSV para sa thesis ---- */
 document.getElementById('csv').onclick = function(){
   if(!DATA) return;
   var head = ['email','pangalan','wika','gabay_na_tapos','laro','streak','sumali'];
