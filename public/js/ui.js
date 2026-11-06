@@ -318,7 +318,7 @@ function viewMe(){
       + '<input type="range" min="0.6" max="1.1" step="0.05" value="'+S.data.rate+'" data-act="rate">'
       + '</div>'
     + '<div id="voiceStatus">'+voiceStatusHtml()+'</div>'
-    + '<button class="toggle-row" data-act="theme"><span><span class="l">'+esc(t('dark'))+'</span><br><span class="muted">'+esc(t('darkS'))+'</span></span>'
+    + emergencyHtml() + '<button class="toggle-row" data-act="theme"><span><span class="l">'+esc(t('dark'))+'</span><br><span class="muted">'+esc(t('darkS'))+'</span></span>'
       + '<span class="track '+(dark?'on':'')+'"><span class="thumb"></span></span></button>'
     + '<button class="listitem" style="margin-bottom:14px" data-act="go" data-arg="account">'
       + '<span class="dot">'+(S.data.account?'✅':'👤')+'</span>'
