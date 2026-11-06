@@ -14,6 +14,7 @@ const { router: authRoutes } = require('./routes/auth');
 const progressRoutes = require('./routes/progress');
 const aiRoutes = require('./routes/ai');
 const adminRoutes = require('./routes/admin');
+const seniorRoutes = require('./routes/senior');
 
 const pkg = require('./package.json');
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', progressRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/me', seniorRoutes);
 
 // The app itself.
 app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
