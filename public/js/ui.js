@@ -64,7 +64,7 @@ function viewHome(){
     + '<h1 class="greet-name">'+esc(S.data.name || t('friend'))+'</h1>'
     + '<p class="greet-date">'+esc(dateStr)+'</p></div>'
     + '<button class="avatar" data-act="go" data-arg="me">'+esc((S.data.name||'T').slice(0,1).toUpperCase())+'</button></div>'
-   + remindersHtml() + '<div class="streak"><div class="streak-icon">🔥</div><div><h3>'+esc(t('streakT',{n:S.data.streak}))+'</h3><p>'+esc(t('streakS'))+'</p></div></div>'
+   + '<div class="streak"><div class="streak-icon">🔥</div><div><h3>'+esc(t('streakT',{n:S.data.streak}))+'</h3><p>'+esc(t('streakS'))+'</p></div></div>'
     + '<div class="sec-label">'+esc(t('today'))+'</div>'
     + '<div class="grid">'
     + tiles.map(function(x){
@@ -318,7 +318,7 @@ function viewMe(){
       + '<input type="range" min="0.6" max="1.1" step="0.05" value="'+S.data.rate+'" data-act="rate">'
       + '</div>'
     + '<div id="voiceStatus">'+voiceStatusHtml()+'</div>'
-    + emergencyHtml() + '<button class="toggle-row" data-act="theme"><span><span class="l">'+esc(t('dark'))+'</span><br><span class="muted">'+esc(t('darkS'))+'</span></span>'
+    + '<button class="toggle-row" data-act="theme"><span><span class="l">'+esc(t('dark'))+'</span><br><span class="muted">'+esc(t('darkS'))+'</span></span>'
       + '<span class="track '+(dark?'on':'')+'"><span class="thumb"></span></span></button>'
     + '<button class="listitem" style="margin-bottom:14px" data-act="go" data-arg="account">'
       + '<span class="dot">'+(S.data.account?'✅':'👤')+'</span>'
