@@ -1,11 +1,11 @@
 /* ================= REMINDERS =================
-Card ng paalala at appointments sa home, at emergency contacts sa me.
+Card ng paalala at appointments sa home, serbisyo sa home, at emergency contacts sa me.
 Hindi ginagalaw ang ui.js: idinadagdag lang ang card pagkatapos mag-render.
 Kung may sira ang file na ito, hindi mablablangko ang app. */
 (function(){
   var API = 'https://tanda-tzlu.onrender.com/api/me';
   var TOKEN_KEY = 'tanda.token';
-  var cache = {appts: null, contacts: null, loadedAt: 0};
+  var cache = {appts: null, contacts: null, services: null, loadedAt: 0};
 
   function esc2(s){
     return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
@@ -26,9 +26,10 @@ Kung may sira ang file na ito, hindi mablablangko ang app. */
     if(!token()) return;
     if(Date.now() - cache.loadedAt < 5 * 60 * 1000) return;
     cache.loadedAt = Date.now();
-    Promise.all([get('/appointments'), get('/contacts')]).then(function(res){
+    Promise.all([get('/appointments'), get('/contacts'), get('/services')]).then(function(res){
       cache.appts = res[0] ? res[0].rows : [];
       cache.contacts = res[1] ? res[1].rows : [];
+      cache.services = res[2] ? res[2].rows : [];
       if(window.S && (S.screen === 'home' || S.screen === 'me')) window.render();
     });
   }
@@ -43,7 +44,7 @@ Kung may sira ang file na ito, hindi mablablangko ang app. */
     }catch(e){ return String(iso); }
   }
 
-  function homeHtml(){
+  function apptHtml(){
     var appts = cache.appts || [];
     if(!appts.length) return '';
     var due = appts.filter(soon);
@@ -58,6 +59,24 @@ Kung may sira ang file na ito, hindi mablablangko ang app. */
         return '<p style="margin:0 0 8px"><strong>' + esc2(fmt(a.starts_at)) + '</strong><br>' + esc2(a.title) + '</p>';
       }).join('') + '</div>';
     return html;
+  }
+
+  function servicesHtml(){
+    var rows = cache.services || [];
+    if(!rows.length) return '';
+    return '<div class="card" style="margin-bottom:14px"><h4 style="font-family:\'Baloo 2\';margin:0 0 8px">Serbisyo</h4>'
+      + rows.map(function(s){
+        return '<p style="margin:0 0 10px"><strong>' + esc2(s.name) + '</strong>'
+          + (s.category ? ' (' + esc2(s.category) + ')' : '') + '<br>'
+          + (s.address ? esc2(s.address) + '<br>' : '')
+          + (s.hours ? '<span class="muted">' + esc2(s.hours) + '</span><br>' : '')
+          + (s.phone ? '<a href="tel:' + esc2(s.phone) + '" style="display:inline-block;margin-top:4px;padding:10px 14px;border-radius:11px;background:var(--teal);color:#fff;font-weight:700;text-decoration:none">📞 ' + esc2(s.phone) + '</a>' : '')
+          + '</p>';
+      }).join('') + '</div>';
+  }
+
+  function homeHtml(){
+    return apptHtml() + servicesHtml();
   }
 
   function meHtml(){
