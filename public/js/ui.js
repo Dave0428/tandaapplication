@@ -64,7 +64,7 @@ function viewHome(){
     + '<h1 class="greet-name">'+esc(S.data.name || t('friend'))+'</h1>'
     + '<p class="greet-date">'+esc(dateStr)+'</p></div>'
     + '<button class="avatar" data-act="go" data-arg="me">'+esc((S.data.name||'T').slice(0,1).toUpperCase())+'</button></div>'
-    + '<div class="streak"><div class="streak-icon">🔥</div><div><h3>'+esc(t('streakT',{n:S.data.streak}))+'</h3><p>'+esc(t('streakS'))+'</p></div></div>'
+   + remindersHtml() + '<div class="streak"><div class="streak-icon">🔥</div><div><h3>'+esc(t('streakT',{n:S.data.streak}))+'</h3><p>'+esc(t('streakS'))+'</p></div></div>'
     + '<div class="sec-label">'+esc(t('today'))+'</div>'
     + '<div class="grid">'
     + tiles.map(function(x){
