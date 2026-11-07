@@ -854,7 +854,7 @@ function runVoiceCommand(said){
   var TS = tandaSys();
   function hasAny(list){ return list.some(function(w){ return s.indexOf(w) >= 0; }); }
 
-  var UP   = ['taas','lakas','palakas','itaas','angat','laki','dagdag','bright','louder',
+  var UP   = ['taas','lakas','palakas','itaas','angat','laki','dagdag','brighter','louder',
               'increase','higher','up '];
   var DOWN = ['baba','hina','pahina','bawas','liit','dim','softer','lower','decrease','dilim','down'];
   var VOL  = ['volume','tunog','boses','sound','audio'];
@@ -866,7 +866,12 @@ function runVoiceCommand(said){
   if(TS && (vol || bri) && !isQuestion){
     /* Naming the thing without a direction almost always means more of it:
        "liwanag naman" is a request for light, not a question about it. */
-    var goUp = up || !down;
+    /* Brightness only changes on an explicit direction. Speech recognition
+       sends partial results while the person is still talking, and a partial
+       like "brightness" or "screen" with no direction used to jump the screen
+       to 100%. Without a direction, do nothing and keep listening. */
+    if(!vol && !up && !down) return true;
+    var goUp = up || (vol && !down);
 
     if(vol){
       /* "Loudest" and "full" mean the top of the range, not one more step. */
