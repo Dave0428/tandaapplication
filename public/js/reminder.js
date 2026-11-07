@@ -1,12 +1,25 @@
-/* ================= REMINDERS =================
-Card ng paalala at appointments sa home, serbisyo sa home, at emergency contacts sa me.
-Hindi ginagalaw ang ui.js: idinadagdag lang ang card pagkatapos mag-render.
-Kung may sira ang file na ito, hindi mablablangko ang app. */
+/* ================= REMINDERS + SENIOR CARDS =================
+Home: Paalala sa itaas; Mga appointment at Serbisyo sa ibaba.
+Me: Emergency contacts.
+Nagdaragdag lang ng card pagkatapos mag-render, hindi ginagalaw ang ui.js.
+English at Tagalog ayon sa setting ng app. */
 (function(){
   var API = 'https://tanda-tzlu.onrender.com/api/me';
   var TOKEN_KEY = 'tanda.token';
   var cache = {appts: null, contacts: null, services: null, loadedAt: 0};
 
+  var L = {
+    en: {reminder:'Reminder', appts:'My appointments', noAppts:'No appointments yet',
+         services:'Services', call:'Call', emergency:'My emergency contacts',
+         relation:'', category:'', hours:'Hours'},
+    tl: {reminder:'Paalala', appts:'Mga appointment ko', noAppts:'Wala pang appointment',
+         services:'Serbisyo', call:'Tawagan', emergency:'Mga emergency contact ko',
+         relation:'', category:'', hours:'Oras'}
+  };
+  function tr(k){
+    var lang = (window.S && S.data && S.data.lang === 'tl') ? 'tl' : 'en';
+    return L[lang][k] || '';
+  }
   function esc2(s){
     return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -44,50 +57,80 @@ Kung may sira ang file na ito, hindi mablablangko ang app. */
     }catch(e){ return String(iso); }
   }
 
-  function apptHtml(){
-    var appts = cache.appts || [];
-    if(!appts.length) return '';
-    var due = appts.filter(soon);
-    var html = '';
-    if(due.length){
-      html += '<div class="warn" style="margin-bottom:14px"><strong>Paalala:</strong><br>'
-        + due.map(function(a){ return esc2(a.title) + ' · ' + esc2(fmt(a.starts_at)); }).join('<br>')
-        + '</div>';
-    }
-    html += '<div class="card" style="margin-bottom:14px"><h4 style="font-family:\'Baloo 2\';margin:0 0 8px">Mga appointment ko</h4>'
-      + appts.slice(0, 5).map(function(a){
-        return '<p style="margin:0 0 8px"><strong>' + esc2(fmt(a.starts_at)) + '</strong><br>' + esc2(a.title) + '</p>';
-      }).join('') + '</div>';
-    return html;
+  /* ---------- shared look ---------- */
+  var CARD = 'background:#fff;border-radius:24px;padding:20px 20px 18px;margin:0 0 16px;'
+    + 'box-shadow:0 2px 0 #e4dccd,0 8px 20px rgba(31,74,70,.08);';
+  var HEAD = 'display:flex;align-items:center;gap:12px;margin:0 0 14px;';
+  var BADGE = function(icon, bg){
+    return '<span style="flex:0 0 auto;width:44px;height:44px;border-radius:14px;background:'+bg+';'
+      + 'display:flex;align-items:center;justify-content:center;font-size:22px">'+icon+'</span>';
+  };
+  var TITLE = function(txt){
+    return '<h3 style="margin:0;font-family:\'Baloo 2\',sans-serif;font-size:21px;line-height:1.1;color:#2a2220">'+esc2(txt)+'</h3>';
+  };
+  var ROW = 'padding:14px 0;border-top:1px solid #efe8da;';
+  var PILL = 'display:inline-block;font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;'
+    + 'background:#f6ead2;color:#7a5a1f;margin-left:6px;vertical-align:middle;';
+  var CALL = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;'
+    + 'margin-top:12px;padding:15px;border-radius:16px;background:var(--teal,#1f4a46);color:#fff;'
+    + 'font-weight:800;font-size:18px;text-decoration:none;letter-spacing:.2px;';
+
+  /* ---------- Paalala (top) ---------- */
+  function paalalaHtml(){
+    var due = (cache.appts || []).filter(soon);
+    if(!due.length) return '';
+    return '<div class="warn" style="margin-bottom:14px"><strong>'+esc2(tr('reminder'))+':</strong><br>'
+      + due.map(function(a){ return esc2(a.title) + ' · ' + esc2(fmt(a.starts_at)); }).join('<br>')
+      + '</div>';
   }
 
+  /* ---------- Appointments (bottom) ---------- */
+  function apptsHtml(){
+    var appts = cache.appts || [];
+    var body = appts.length
+      ? appts.slice(0, 5).map(function(a, i){
+          return '<div style="'+(i ? ROW : '')+'padding-top:'+(i?'14px':'0')+'">'
+            + '<div style="font-size:15px;color:#7a6d5f;font-weight:700">'+esc2(fmt(a.starts_at))+'</div>'
+            + '<div style="font-size:19px;color:#2a2220;margin-top:2px">'+esc2(a.title)+'</div></div>';
+        }).join('')
+      : '<p style="margin:0;color:#7a6d5f;font-size:17px">'+esc2(tr('noAppts'))+'</p>';
+    return '<div style="'+CARD+'">'
+      + '<div style="'+HEAD+'">'+BADGE('📅','#f6ead2')+TITLE(tr('appts'))+'</div>'
+      + body + '</div>';
+  }
+
+  /* ---------- Serbisyo (bottom) ---------- */
   function servicesHtml(){
     var rows = cache.services || [];
     if(!rows.length) return '';
-    return '<div class="card" style="margin-bottom:14px"><h4 style="font-family:\'Baloo 2\';margin:0 0 8px">Serbisyo</h4>'
-      + rows.map(function(s){
-        return '<p style="margin:0 0 10px"><strong>' + esc2(s.name) + '</strong>'
-          + (s.category ? ' (' + esc2(s.category) + ')' : '') + '<br>'
-          + (s.address ? esc2(s.address) + '<br>' : '')
-          + (s.hours ? '<span class="muted">' + esc2(s.hours) + '</span><br>' : '')
-          + (s.phone ? '<a href="tel:' + esc2(s.phone) + '" style="display:inline-block;margin-top:4px;padding:10px 14px;border-radius:11px;background:var(--teal);color:#fff;font-weight:700;text-decoration:none">📞 ' + esc2(s.phone) + '</a>' : '')
-          + '</p>';
-      }).join('') + '</div>';
+    var items = rows.map(function(s, i){
+      return '<div style="'+(i ? ROW : '')+'">'
+        + '<div style="font-size:19px;font-weight:800;color:#2a2220">'+esc2(s.name)
+        + (s.category ? '<span style="'+PILL+'">'+esc2(s.category)+'</span>' : '') + '</div>'
+        + (s.address ? '<div style="font-size:16px;color:#5b5047;margin-top:4px">'+esc2(s.address)+'</div>' : '')
+        + (s.hours ? '<div style="font-size:15px;color:#7a6d5f;margin-top:2px">'+esc2(tr('hours'))+': '+esc2(s.hours)+'</div>' : '')
+        + (s.phone ? '<a href="tel:'+esc2(s.phone)+'" style="'+CALL+'">📞 '+esc2(tr('call'))+' '+esc2(s.phone)+'</a>' : '')
+        + '</div>';
+    }).join('');
+    return '<div style="'+CARD+'">'
+      + '<div style="'+HEAD+'">'+BADGE('🏥','#dff0e8')+TITLE(tr('services'))+'</div>'
+      + items + '</div>';
   }
 
-  function homeHtml(){
-    return apptHtml() + servicesHtml();
-  }
-
+  /* ---------- Emergency contacts (Me) ---------- */
   function meHtml(){
     var rows = cache.contacts || [];
     if(!rows.length) return '';
-    return '<div class="card" style="margin-bottom:14px"><h4 style="font-family:\'Baloo 2\';margin:0 0 8px">Emergency contacts ko</h4>'
-      + rows.map(function(c){
-        return '<p style="margin:0 0 10px"><strong>' + esc2(c.name) + '</strong>'
-          + (c.relationship ? ' (' + esc2(c.relationship) + ')' : '') + '<br>'
-          + '<a href="tel:' + esc2(c.phone) + '" style="display:inline-block;margin-top:4px;padding:10px 14px;border-radius:11px;background:var(--teal);color:#fff;font-weight:700;text-decoration:none">📞 ' + esc2(c.phone) + '</a></p>';
-      }).join('') + '</div>';
+    var items = rows.map(function(c, i){
+      return '<div style="'+(i ? ROW : '')+'">'
+        + '<div style="font-size:19px;font-weight:800;color:#2a2220">'+esc2(c.name)
+        + (c.relationship ? '<span style="'+PILL+'">'+esc2(c.relationship)+'</span>' : '') + '</div>'
+        + '<a href="tel:'+esc2(c.phone)+'" style="'+CALL+'">📞 '+esc2(tr('call'))+' '+esc2(c.phone)+'</a>'
+        + '</div>';
+    }).join('');
+    return '<div style="'+CARD+'">'
+      + '<div style="'+HEAD+'">'+BADGE('🆘','#f7dcd6')+TITLE(tr('emergency'))+'</div>'
+      + items + '</div>';
   }
 
   function decorate(){
@@ -96,8 +139,11 @@ Kung may sira ang file na ito, hindi mablablangko ang app. */
     refresh();
     if(S.screen === 'home'){
       var hdr = shell.querySelector('.header');
-      var html = homeHtml();
-      if(hdr && html) hdr.insertAdjacentHTML('afterend', '<div id="remBox">' + html + '</div>');
+      var top = paalalaHtml();
+      if(hdr && top) hdr.insertAdjacentHTML('afterend', '<div id="remTop">' + top + '</div>');
+      var sc = shell.querySelector('.scroll');
+      var bottom = apptsHtml() + servicesHtml();
+      if(sc) sc.insertAdjacentHTML('beforeend', '<div id="remBottom" style="padding:4px 0 24px">' + bottom + '</div>');
     }
     if(S.screen === 'me'){
       var tg = shell.querySelector('.toggle-row');
