@@ -32,6 +32,16 @@ router.get('/appointments', async (req, res) => {
 });
 
 // GET /api/me/services: aktibong serbisyo lang
+/* DELETE /api/me/appointments/:id - the person can remove their own
+   appointment. The user_id check means nobody can delete someone else's. */
+router.delete('/appointments/:id', async (req, res) => {
+  try{
+    await db.run('DELETE FROM appointments WHERE id = ? AND user_id = ?',
+      [Number(req.params.id), req.user.uid]);
+    res.json({ ok: true });
+  }catch(err){ console.error('me appointment delete failed:', err); res.status(500).json({ error:'server error' }); }
+});
+
 router.get('/services', async (req, res) => {
   try{
     const rows = await db.all(
