@@ -10,10 +10,10 @@ English at Tagalog ayon sa setting ng app. */
 
   var L = {
     en: {reminder:'Reminder', appts:'My appointments', noAppts:'No appointments yet',
-         services:'Services', call:'Call', emergency:'My emergency contacts',
+         services:'Services', call:'Call', emergency:'My emergency contacts', del:'Delete', delAsk:'Delete this appointment?', delFail:'Could not delete. Try again.',
          relation:'', category:'', hours:'Hours'},
     tl: {reminder:'Paalala', appts:'Mga appointment ko', noAppts:'Wala pang appointment',
-         services:'Serbisyo', call:'Tawagan', emergency:'Mga emergency contact ko',
+         services:'Serbisyo', call:'Tawagan', emergency:'Mga emergency contact ko', del:'Burahin', delAsk:'Burahin ang appointment na ito?', delFail:'Hindi nabura. Subukan ulit.',
          relation:'', category:'', hours:'Oras'}
   };
   function tr(k){
@@ -43,6 +43,7 @@ English at Tagalog ayon sa setting ng app. */
       cache.appts = res[0] ? res[0].rows : [];
       cache.contacts = res[1] ? res[1].rows : [];
       cache.services = res[2] ? res[2].rows : [];
+      scheduleAppointmentAlerts(cache.appts);
       if(window.S && (S.screen === 'home' || S.screen === 'me')) window.render();
     });
   }
@@ -75,6 +76,68 @@ English at Tagalog ayon sa setting ng app. */
     + 'margin-top:12px;padding:15px;border-radius:16px;background:var(--teal,#1f4a46);color:#fff;'
     + 'font-weight:800;font-size:18px;text-decoration:none;letter-spacing:.2px;';
 
+  /* ---------- Phone notifications for appointments ----------
+     Three alerts per appointment: one day before, one hour before, and
+     fifteen minutes before. They are set on the phone itself, so they still
+     ring when the app is closed. Ids start at 5000 so they never collide with
+     the daily nudge (id 1). Every refresh cancels the old ones first, so a
+     changed or deleted appointment does not leave a stale alert behind. */
+  var ALERT_BASE = 5000;
+  var ALERTS = {
+    en: {day:'Tomorrow: ', hour:'In 1 hour: ', min:'In 15 minutes: '},
+    tl: {day:'Bukas: ', hour:'Isang oras na lang: ', min:'15 minuto na lang: '}
+  };
+  function scheduleAppointmentAlerts(appts){
+    var LN = null;
+    try{
+      if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications){
+        LN = window.Capacitor.Plugins.LocalNotifications;
+      }
+    }catch(e){}
+    if(!LN || !appts) return;
+
+    var lang = (window.S && S.data && S.data.lang === 'tl') ? 'tl' : 'en';
+    var DONE = ['done','cancelled','canceled'];
+
+    LN.requestPermissions().then(function(res){
+      if(res && res.display !== 'granted') return;
+
+      var clearOld = Promise.resolve();
+      if(LN.getPending){
+        clearOld = LN.getPending().then(function(p){
+          var old = (p.notifications || []).filter(function(n){ return n.id >= ALERT_BASE; })
+                                           .map(function(n){ return {id: n.id}; });
+          if(old.length) return LN.cancel({notifications: old});
+        });
+      }
+
+      return clearOld.then(function(){
+        var list = [];
+        appts.forEach(function(a){
+          if(DONE.indexOf(String(a.status || '').toLowerCase()) >= 0) return;
+          var at = new Date(a.starts_at).getTime();
+          if(!at) return;
+          var plan = [
+            {key:'day',  ms: at - 24 * 3600 * 1000},
+            {key:'hour', ms: at - 3600 * 1000},
+            {key:'min',  ms: at - 15 * 60 * 1000}
+          ];
+          plan.forEach(function(p, k){
+            if(p.ms <= Date.now()) return;   /* already passed */
+            list.push({
+              id: ALERT_BASE + Number(a.id) * 3 + k,
+              title: 'TANDA',
+              body: ALERTS[lang][p.key] + a.title + ' · ' + fmt(a.starts_at),
+              schedule: {at: new Date(p.ms), allowWhileIdle: true},
+              smallIcon: 'ic_stat_icon_config_sample'
+            });
+          });
+        });
+        if(list.length) return LN.schedule({notifications: list});
+      });
+    }).catch(function(){});
+  }
+
   /* ---------- Paalala (top) ---------- */
   function paalalaHtml(){
     var due = (cache.appts || []).filter(soon);
@@ -85,19 +148,39 @@ English at Tagalog ayon sa setting ng app. */
   }
 
   /* ---------- Appointments (bottom) ---------- */
+  var DEL_BTN = 'margin-top:10px;padding:10px 16px;border-radius:12px;border:2px solid #b5443a;'
+    + 'background:#fff;color:#b5443a;font-weight:800;font-size:16px;cursor:pointer;';
   function apptsHtml(){
     var appts = cache.appts || [];
     var body = appts.length
-      ? appts.slice(0, 5).map(function(a, i){
+      ? appts.map(function(a, i){
           return '<div style="'+(i ? ROW : '')+'padding-top:'+(i?'14px':'0')+'">'
             + '<div style="font-size:15px;color:#7a6d5f;font-weight:700">'+esc2(fmt(a.starts_at))+'</div>'
-            + '<div style="font-size:19px;color:#2a2220;margin-top:2px">'+esc2(a.title)+'</div></div>';
+            + '<div style="font-size:19px;color:#2a2220;margin-top:2px">'+esc2(a.title)+'</div>'
+            + '<button type="button" style="'+DEL_BTN+'" onclick="window.tandaDeleteAppt('+Number(a.id)+')">'
+            + '🗑 '+esc2(tr('del'))+'</button></div>';
         }).join('')
       : '<p style="margin:0;color:#7a6d5f;font-size:17px">'+esc2(tr('noAppts'))+'</p>';
     return '<div style="'+CARD+'">'
       + '<div style="'+HEAD+'">'+BADGE('📅','#f6ead2')+TITLE(tr('appts'))+'</div>'
       + body + '</div>';
   }
+
+  /* Delete one of the person's own appointments, then re-sync the phone
+     alerts so the deleted one stops ringing. */
+  window.tandaDeleteAppt = function(id){
+    if(!window.confirm(tr('delAsk'))) return;
+    var tok = token();
+    if(!tok) return;
+    fetch(API + '/appointments/' + id, {method:'DELETE', headers:{'Authorization':'Bearer ' + tok}})
+      .then(function(r){
+        if(!r.ok) throw new Error('fail');
+        cache.appts = (cache.appts || []).filter(function(a){ return Number(a.id) !== Number(id); });
+        scheduleAppointmentAlerts(cache.appts);
+        if(window.render) window.render();
+      })
+      .catch(function(){ window.alert(tr('delFail')); });
+  };
 
   /* ---------- Serbisyo (bottom) ---------- */
   function servicesHtml(){
